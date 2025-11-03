@@ -1,40 +1,16 @@
-#!/usr/bin/env python3
-import os, sys, requests, feedparser
-from datetime import datetime, timedelta, timezone
-from dateutil import parser as dateparser
-
-TOKEN   = os.environ["TELEGRAM_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-WINDOW_MINUTES = int(os.environ.get("WINDOW_MINUTES", "10"))
-DEBUG = ("--debug" in sys.argv)
-
 FEEDS = {
     "🧨 DataBreaches.net": "https://databreaches.net/feed/",
     "🧨 UpGuard Breaches": "https://www.upguard.com/breaches/rss.xml",
     "🧨 HIBP Latest": "https://feeds.feedburner.com/HaveIBeenPwnedLatestBreaches",
     "🌐 NetBlocks (Internet Disruptions)": "https://netblocks.org/feed",
-}
 
-NWS_URL = ("https://api.weather.gov/alerts/active"
-           "?status=actual&message_type=Alert,Update&severity=Severe,Extreme")
-
-def log(*a):
-    print("[alerts]", *a, flush=True)
-
-def send_tg(html_text, disable_preview=False):
-    try:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        data = {
-            "chat_id": CHAT_ID,
-            "text": html_text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": "true" if disable_preview else "false",
-        }
-        r = requests.post(url, data=data, timeout=20)
-        if r.status_code != 200:
-            log("Telegram non-200:", r.status_code, r.text[:200])
-    except Exception as e:
-        log("Telegram error:", repr(e))
+    # Highly active add-ons:
+    "🌋 USGS Significant Earthquakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.atom",
+    "🌊 NOAA Tsunami Alerts": "https://www.tsunami.gov/events/xml/atom10.xml",
+    "🌀 NHC Atlantic Advisories": "https://www.nhc.noaa.gov/nhc_at.xml",
+    "🌀 NHC Eastern Pacific Advisories": "https://www.nhc.noaa.gov/nhc_ep.xml",
+    "🛡️ CISA Current Activity": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+}        log("Telegram error:", repr(e))
 
 def is_recent(dt_str, window_minutes):
     if not dt_str:
