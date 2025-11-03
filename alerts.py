@@ -6,6 +6,7 @@ from dateutil import parser as dateparser
 TOKEN   = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 WINDOW_MINUTES = int(os.environ.get("WINDOW_MINUTES", "10"))
+DEBUG = ("--debug" in sys.argv)
 
 FEEDS = {
     "🧨 DataBreaches.net": "https://databreaches.net/feed/",
@@ -51,16 +52,26 @@ def check_rss():
     for label, url in FEEDS.items():
         try:
             d = feedparser.parse(url)
-            for e in d.entries[:20]:
+            entries = d.entries[:20]
+            log(f"RSS {label}: got {len(entries)} items")
+            if DEBUG:
+                # Send 1-2 sample items even if old
+                for e in entries[:2]:
+                    title = e.get("title","New item")
+                    link  = e.get("link","")
+                    if link:
+                        send_tg(f"[DEBUG SAMPLE] {label}\n<a href=\"{link}\">{title}</a>")
+                continue
+
+            # Normal mode: only recent items
+            for e in entries:
                 published = e.get("published") or e.get("updated") or ""
                 if not is_recent(published, WINDOW_MINUTES):
                     continue
-                title = e.get("title", "New item")
-                link  = e.get("link", "")
-                if not link:
-                    continue
-                msg = f"{label}\n<a href=\"{link}\">{title}</a>"
-                send_tg(msg)
+                title = e.get("title","New item")
+                link  = e.get("link","")
+                if link:
+                    send_tg(f"{label}\n<a href=\"{link}\">{title}</a>")
         except Exception as ex:
             log("RSS error:", label, url, repr(ex))
 
@@ -71,29 +82,36 @@ def check_nws():
             log("NWS non-200:", r.status_code, r.text[:200])
             return
         data = r.json()
-        for feat in data.get("features", []):
+        feats = data.get("features", [])
+        log(f"NWS: got {len(feats)} active severe/extreme alerts")
+        if DEBUG:
+            # Send up to 2 sample alerts
+            for feat in feats[:2]:
+                p = feat.get("properties", {})
+                event = p.get("event","NWS Alert")
+                area  = p.get("areaDesc","")
+                link  = p.get("uri") or p.get("id") or "https://www.weather.gov/alerts"
+                send_tg(f"[DEBUG SAMPLE] ⚠️ SEVERE WEATHER (US)\n<b>{event}</b> — {area[:140]}\n<a href=\"{link}\">Details</a>", True)
+            return
+
+        # Normal mode: recent only
+        for feat in feats:
             p = feat.get("properties", {})
             ts = p.get("sent") or p.get("effective") or p.get("onset") or ""
             if not is_recent(ts, WINDOW_MINUTES):
                 continue
-            event = p.get("event", "NWS Alert")
-            area  = p.get("areaDesc", "")
+            event = p.get("event","NWS Alert")
+            area  = p.get("areaDesc","")
             link  = p.get("uri") or p.get("id") or "https://www.weather.gov/alerts"
-            msg = f"⚠️ SEVERE WEATHER (US)\n<b>{event}</b> — {area[:140]}\n<a href=\"{link}\">Details</a>"
-            send_tg(msg, disable_preview=True)
+            send_tg(f"⚠️ SEVERE WEATHER (US)\n<b>{event}</b> — {area[:140]}\n<a href=\"{link}\">Details</a>", True)
     except Exception as e:
         log("NWS error:", repr(e))
 
 def main():
-    log("Starting run. Window(minutes)=", WINDOW_MINUTES)
+    log("Starting run. Window(min)=", WINDOW_MINUTES, "DEBUG=", DEBUG)
     check_rss()
     check_nws()
     log("Run complete.")
 
 if __name__ == "__main__":
-    try:
-        main()
-        sys.exit(0)
-    except Exception as e:
-        log("Fatal error:", repr(e))
-        sys.exit(0)
+    main()
