@@ -2,21 +2,47 @@ name: run-alert-bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/5 * * * *"   # every 5 minutes
   workflow_dispatch:
 
 jobs:
   bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Self-test (Telegram ping)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="✅ GitHub Actions connected. Running debug pass..."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - name: Debug RSS
-        run: python alerts.py --debug
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests feedparser python-dateutil
+
+      # DEBUG RUN: proves feeds are working and sends a couple of samples
+      - name: Debug RSS (send sample items)
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WINDOW_MINUTES: "60"
+        run: python alerts.py --debug
+
+      # NORMAL RUN (uncomment this and remove the Debug step after testing)
+      # - name: Run alerts (normal)
+      #   env:
+      #     TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      #     TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      #     WINDOW_MINUTES: "10"
+      #   run: python alerts.py
