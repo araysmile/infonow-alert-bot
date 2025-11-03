@@ -1,39 +1,13 @@
-name: run-alert-bot
+FEEDS = {
+    "🧨 DataBreaches.net": "https://databreaches.net/feed/",
+    "🧨 UpGuard Breaches": "https://www.upguard.com/breaches/rss.xml",
+    "🧨 HIBP Latest": "https://feeds.feedburner.com/HaveIBeenPwnedLatestBreaches",
+    "🌐 NetBlocks (Internet Disruptions)": "https://netblocks.org/feed",
 
-on:
-  schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes
-  workflow_dispatch:
-
-jobs:
-  bot:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests feedparser python-dateutil
-
-      - name: Self-test (Telegram ping)
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="✅ GitHub Actions connected. Normal mode active."
-
-      - name: Run alerts
-        run: python alerts.py
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WINDOW_MINUTES: "10"
+    # Highly active add-ons:
+    "🌋 USGS Significant Earthquakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.atom",
+    "🌊 NOAA Tsunami Alerts": "https://www.tsunami.gov/events/xml/atom10.xml",
+    "🌀 NHC Atlantic Advisories": "https://www.nhc.noaa.gov/nhc_at.xml",
+    "🌀 NHC Eastern Pacific Advisories": "https://www.nhc.noaa.gov/nhc_ep.xml",
+    "🛡️ CISA Current Activity": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+}
