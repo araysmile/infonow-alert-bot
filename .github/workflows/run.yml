@@ -1,21 +1,38 @@
 name: run-alert-bot
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: "*/5 * * * *"   # every 5 minutes
-  workflow_dispatch:        # allows manual run
 
 jobs:
   bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # quick ping so you know secrets & chat_id are correct
+      - name: Self-test (Telegram ping)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="✅ GitHub Actions connected. Starting alert job..."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - run: python alerts.py
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run alerts
         env:
-          TELEGRAM_TOKEN: ${{ secrets.8413416404:AAFXi9o6COMAePGBZuqEBBCc5xQaC75QX4Y }}
-          TELEGRAM_CHAT_ID: ${{ secrets.-1003269191024 }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WINDOW_MINUTES: "10"
+        run: python alerts.py
