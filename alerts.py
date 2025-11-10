@@ -7,7 +7,7 @@ Alert Wire bot: fetch selected cyber/disaster feeds and post new items to Telegr
 Env vars required:
   - TELEGRAM_TOKEN       (from @BotFather)
   - TELEGRAM_CHAT_ID     (numeric id, e.g. -100xxxxxxxxxx)
-  - WINDOW_MINUTES       (optional; default 15)
+  - WINDOW_MINUTES       (optional; default 30)
 
 CLI flags:
   --debug   -> send a couple of sample items from each source even if they're old
@@ -28,30 +28,105 @@ from dateutil import parser as dateparser
 
 # FEEDS: label -> RSS/Atom URL
 FEEDS = {
+    # ============ CYBERSECURITY ============
     # Cyber Security News (Very Active)
     "🔥 The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
     "🔥 BleepingComputer": "https://www.bleepingcomputer.com/feed/",
     "🔥 Krebs on Security": "https://krebsonsecurity.com/feed/",
     "🔥 Dark Reading": "https://www.darkreading.com/rss.xml",
+    "🔥 SecurityWeek": "https://www.securityweek.com/feed/",
+    "🔥 The Record": "https://therecord.media/feed",
+    "🔥 Threatpost": "https://threatpost.com/feed/",
+    "🔥 SecurityAffairs": "https://securityaffairs.com/feed",
+    "🔥 Graham Cluley": "https://grahamcluley.com/feed/",
+    "🔥 Schneier on Security": "https://www.schneier.com/feed/atom/",
     
     # Breaches & Incidents (Active)
     "🧨 DataBreaches.net": "https://databreaches.net/feed/",
     "🧨 UpGuard Breaches": "https://www.upguard.com/breaches/rss.xml",
     "🧨 HIBP Latest": "https://feeds.feedburner.com/HaveIBeenPwnedLatestBreaches",
+    "🧨 Ransomware.live": "https://www.ransomware.live/rss.xml",
+    "🧨 Troy Hunt": "https://www.troyhunt.com/rss/",
     
     # Government & Critical Infrastructure (Medium Activity)
     "🛡️ CISA Advisories": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
     "🛡️ CISA Current Activity": "https://www.cisa.gov/news-events/cybersecurity-advisories/current-activity.xml",
     "🛡️ US-CERT Alerts": "https://www.cisa.gov/news-events/alerts.xml",
+    "🛡️ ICS-CERT": "https://www.cisa.gov/news-events/ics-advisories.xml",
     
     # Threat Intelligence (Active)
     "⚡ Malwarebytes Labs": "https://www.malwarebytes.com/blog/feed/index.xml",
     "⚡ Talos Intelligence": "https://blog.talosintelligence.com/rss/",
+    "⚡ Unit 42": "https://unit42.paloaltonetworks.com/feed/",
+    "⚡ Mandiant": "https://www.mandiant.com/resources/blog/rss.xml",
+    "⚡ CrowdStrike": "https://www.crowdstrike.com/blog/feed/",
+    "⚡ Microsoft Security": "https://www.microsoft.com/en-us/security/blog/feed/",
     
-    # Internet Disruptions
+    # Vulnerabilities (Very Active)
+    "🐛 VulDB Recent": "https://vuldb.com/?rss.recent",
+    "🐛 Packet Storm": "https://packetstormsecurity.com/feeds/news/",
+    "🐛 Exploit-DB": "https://www.exploit-db.com/rss.xml",
+    
+    # Malware Analysis
+    "🦠 Malware Traffic Analysis": "https://www.malware-traffic-analysis.net/blog-entries.rss",
+    "🦠 ANY.RUN": "https://any.run/cybersecurity-blog/feed/",
+    "🦠 Abuse.ch": "https://urlhaus.abuse.ch/rss/",
+    
+    # Internet Infrastructure
     "🌐 NetBlocks": "https://netblocks.org/feed",
+    "🌐 Cloudflare Radar": "https://blog.cloudflare.com/rss/",
+    "🌐 SANS ISC": "https://isc.sans.edu/rssfeed.xml",
     
-    # Natural Disasters (Only when events occur)
+    # Reddit Communities
+    "💬 r/netsec": "https://www.reddit.com/r/netsec/.rss",
+    "💬 r/cybersecurity": "https://www.reddit.com/r/cybersecurity/.rss",
+    
+    # ============ AI / MACHINE LEARNING ============
+    "🤖 OpenAI Blog": "https://openai.com/blog/rss.xml",
+    "🤖 Anthropic News": "https://www.anthropic.com/news/rss.xml",
+    "🤖 Google DeepMind": "https://deepmind.google/blog/rss.xml",
+    "🤖 Meta AI": "https://ai.meta.com/blog/rss/",
+    "🤖 Hugging Face": "https://huggingface.co/blog/feed.xml",
+    "🤖 Stability AI": "https://stability.ai/blog/rss.xml",
+    "🤖 VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
+    "🤖 TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "🤖 MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+    "🤖 The Batch (DeepLearning.AI)": "https://www.deeplearning.ai/the-batch/feed/",
+    
+    # ============ OPEN SOURCE ============
+    "⭐ GitHub Trending": "https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml",
+    "⭐ GitHub Python": "https://mshibanami.github.io/GitHubTrendingRSS/daily/python.xml",
+    "⭐ GitHub Java": "https://mshibanami.github.io/GitHubTrendingRSS/daily/java.xml",
+    "⭐ Linux Kernel": "https://www.kernel.org/feeds/kdist.xml",
+    "⭐ Python Insider": "https://blog.python.org/feeds/posts/default",
+    "⭐ OpenSSF Blog": "https://openssf.org/blog/feed/",
+    "⭐ The Linux Foundation": "https://www.linuxfoundation.org/feed",
+    
+    # ============ HARDWARE HACKING ============
+    "🔧 Hackaday": "https://hackaday.com/feed/",
+    "🔧 Raspberry Pi Blog": "https://www.raspberrypi.com/news/feed/",
+    "🔧 Arduino Blog": "https://blog.arduino.cc/feed/",
+    "🔧 Adafruit Blog": "https://blog.adafruit.com/feed/",
+    "🔧 SparkFun News": "https://www.sparkfun.com/feeds/news",
+    "🔧 CNX Software": "https://www.cnx-software.com/feed/",
+    "🔧 Hackster.io": "https://www.hackster.io/blog.rss",
+    
+    # ============ CRYPTO SECURITY ============
+    "₿ Rekt News": "https://rekt.news/rss.xml",
+    "₿ CertiK Alerts": "https://www.certik.com/resources/blog/rss.xml",
+    "₿ SlowMist": "https://slowmist.medium.com/feed",
+    "₿ Blockchain Graveyard": "https://magoo.github.io/Blockchain-Graveyard/feed.xml",
+    "₿ Coindesk Security": "https://www.coindesk.com/arc/outboundfeeds/rss/category/tech/security/",
+    "₿ The Block Security": "https://www.theblock.co/rss.xml",
+    
+    # ============ FINANCIAL CRIMES ============
+    "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
+    "💰 DOJ Financial Crimes": "https://www.justice.gov/feeds/opa/financial-fraud.xml",
+    "💰 FBI White Collar": "https://www.fbi.gov/feeds/fbi-in-the-news/fbi-in-the-news.xml",
+    "💰 FTC Consumer Alerts": "https://www.consumer.ftc.gov/feeds/articles.xml",
+    "💰 CFTC Press Releases": "https://www.cftc.gov/rss/PressReleases/rss.xml",
+    
+    # ============ NATURAL DISASTERS ============
     "🌋 USGS Significant Earthquakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.atom",
     "🌊 NOAA Tsunami Alerts": "https://www.tsunami.gov/events/xml/atom10.xml",
     "🌀 NHC Atlantic Advisories": "https://www.nhc.noaa.gov/nhc_at.xml",
@@ -261,9 +336,9 @@ def main():
         return 0
 
     try:
-        window_minutes = int(os.environ.get("WINDOW_MINUTES", "15"))
+        window_minutes = int(os.environ.get("WINDOW_MINUTES", "30"))
     except Exception:
-        window_minutes = 15
+        window_minutes = 30
 
     log("=" * 60)
     log(f"Alert Bot Starting")
