@@ -28,18 +28,40 @@ from dateutil import parser as dateparser
 
 # FEEDS: label -> RSS/Atom URL
 FEEDS = {
+    # ============ BREAKING NEWS & GENERAL ============
+    # Major News (Reuters/AP via workarounds)
+    "📰 Reuters (24h)": "https://news.google.com/rss/search?q=when:24h+allinurl:reuters.com&ceid=US:en&hl=en-US&gl=US",
+    "📰 Google News - Top Stories": "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+    "📰 Google News - US": "https://news.google.com/rss/headlines/section/geo/United%20States?hl=en-US&gl=US&ceid=US:en",
+    
+    # Investigative Journalism (JUICY STUFF!)
+    "🔍 ProPublica": "https://www.propublica.org/feeds/propublica/main",
+    "🔍 ProPublica - Criminal Justice": "https://www.propublica.org/topics/criminal-justice.rss",
+    "🔍 The Intercept": "https://theintercept.com/feed/?rss",
+    "🔍 Bellingcat": "https://www.bellingcat.com/feed/",
+    
+    # Tech News (Drama & Scandals)
+    "📱 The Verge": "https://www.theverge.com/rss/index.xml",
+    "📱 TechCrunch": "https://techcrunch.com/feed/",
+    "📱 Ars Technica": "https://feeds.arstechnica.com/arstechnica/index",
+    "📱 Ars Technica - Tech Policy": "https://feeds.arstechnica.com/arstechnica/tech-policy",
+    "📱 Wired": "https://www.wired.com/feed/rss",
+    "📱 Engadget": "https://www.engadget.com/rss.xml",
+    
     # ============ CYBERSECURITY ============
     # Cyber Security News (Very Active)
     "🔥 The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
     "🔥 BleepingComputer": "https://www.bleepingcomputer.com/feed/",
     "🔥 Krebs on Security": "https://krebsonsecurity.com/feed/",
-    "🔥 Dark Reading": "https://www.darkreading.com/rss.xml",
     "🔥 SecurityWeek": "https://www.securityweek.com/feed/",
     "🔥 The Record": "https://therecord.media/feed",
     "🔥 Threatpost": "https://threatpost.com/feed/",
     "🔥 SecurityAffairs": "https://securityaffairs.com/feed",
     "🔥 Graham Cluley": "https://grahamcluley.com/feed/",
     "🔥 Schneier on Security": "https://www.schneier.com/feed/atom/",
+    "🔥 HackRead": "https://www.hackread.com/feed/",
+    "🔥 The Cyber Post": "https://thecyberpost.com/feed/",
+    "🔥 IT Security Guru": "https://www.itsecurityguru.org/feed/",
     
     # Breaches & Incidents (Active)
     "🧨 DataBreaches.net": "https://databreaches.net/feed/",
@@ -62,8 +84,7 @@ FEEDS = {
     "⚡ CrowdStrike": "https://www.crowdstrike.com/blog/feed/",
     "⚡ Microsoft Security": "https://www.microsoft.com/en-us/security/blog/feed/",
     
-    # Vulnerabilities (Very Active)
-    "🐛 VulDB Recent": "https://vuldb.com/?rss.recent",
+    # Vulnerabilities (Active)
     "🐛 Packet Storm": "https://packetstormsecurity.com/feeds/news/",
     "🐛 Exploit-DB": "https://www.exploit-db.com/rss.xml",
     
@@ -76,10 +97,6 @@ FEEDS = {
     "🌐 NetBlocks": "https://netblocks.org/feed",
     "🌐 Cloudflare Radar": "https://blog.cloudflare.com/rss/",
     "🌐 SANS ISC": "https://isc.sans.edu/rssfeed.xml",
-    
-    # Reddit Communities
-    "💬 r/netsec": "https://www.reddit.com/r/netsec/.rss",
-    "💬 r/cybersecurity": "https://www.reddit.com/r/cybersecurity/.rss",
     
     # ============ AI / MACHINE LEARNING ============
     "🤖 OpenAI Blog": "https://openai.com/blog/rss.xml",
@@ -119,12 +136,20 @@ FEEDS = {
     "₿ Coindesk Security": "https://www.coindesk.com/arc/outboundfeeds/rss/category/tech/security/",
     "₿ The Block Security": "https://www.theblock.co/rss.xml",
     
-    # ============ FINANCIAL CRIMES ============
+    # ============ FINANCIAL CRIMES & WHITE COLLAR ============
     "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
-    "💰 DOJ Financial Crimes": "https://www.justice.gov/feeds/opa/financial-fraud.xml",
-    "💰 FBI White Collar": "https://www.fbi.gov/feeds/fbi-in-the-news/fbi-in-the-news.xml",
+    "💰 DOJ Press Releases": "https://www.justice.gov/feeds/opa/topic/financial-fraud.xml",
+    "💰 FBI Financial Fraud": "https://www.fbi.gov/feeds/fbi-in-the-news/fbi-in-the-news.xml",
     "💰 FTC Consumer Alerts": "https://www.consumer.ftc.gov/feeds/articles.xml",
     "💰 CFTC Press Releases": "https://www.cftc.gov/rss/PressReleases/rss.xml",
+    "💰 IRS Criminal Investigation": "https://www.irs.gov/rss/irs-criminal-investigation-newsroom",
+    
+    # ============ LAW ENFORCEMENT & DRUG BUSTS ============
+    "🚔 DEA Press Releases": "https://www.dea.gov/rss/press-releases.xml",
+    "🚔 DOJ Drug Enforcement": "https://www.justice.gov/feeds/opa/topic/drug-enforcement.xml",
+    "🚔 FBI Press Releases": "https://www.fbi.gov/feeds/press-releases/press-releases.xml",
+    "🚔 DOJ Public Integrity": "https://www.justice.gov/feeds/opa/topic/public-integrity.xml",
+    "🚔 DOJ Organized Crime": "https://www.justice.gov/feeds/opa/topic/organized-crime.xml",
     
     # ============ NATURAL DISASTERS ============
     "🌋 USGS Significant Earthquakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.atom",
