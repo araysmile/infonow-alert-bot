@@ -132,6 +132,23 @@ FEEDS = {
     "₿ Blockchain Graveyard": "https://magoo.github.io/Blockchain-Graveyard/feed.xml",
     "₿ Coindesk Security": "https://www.coindesk.com/arc/outboundfeeds/rss/category/tech/security/",
     "₿ The Block Security": "https://www.theblock.co/rss.xml",
+
+  # Critical Infrastructure & Government
+"🛡️ FBI Cyber Division": "https://www.fbi.gov/news/stories/cyber",
+"🛡️ NSA Cybersecurity": "https://www.nsa.gov/Press-Room/Press-Releases-Statements/RSS/",
+
+# Serious Security Research
+"🔥 Dark Reading": "https://www.darkreading.com/rss.xml",
+"🔥 Risky Business": "https://risky.biz/feeds/risky-business/",
+
+# Investigative/Deep Dives (low volume, high quality)
+"🔍 Krebs on Security": "https://krebsonsecurity.com/feed/",  # Already have this - KEEP IT
+"🔍 Wired Security": "https://www.wired.com/feed/category/security/latest/rss",
+"🔍 Vice Motherboard": "https://www.vice.com/en/rss/topic/tech",
+
+# Breaking News (actual breaking news)
+"📰 BBC Breaking": "https://feeds.bbci.co.uk/news/rss.xml",
+"📰 AP News": "https://rsshub.app/apnews/topics/apf-topnews",
     
     # ============ FINANCIAL CRIMES & WHITE COLLAR ============
     "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
