@@ -41,12 +41,9 @@ FEEDS = {
     "🔍 Bellingcat": "https://www.bellingcat.com/feed/",
     
     # Tech News (Drama & Scandals)
-    "📱 The Verge": "https://www.theverge.com/rss/index.xml",
     "📱 TechCrunch": "https://techcrunch.com/feed/",
     "📱 Ars Technica": "https://feeds.arstechnica.com/arstechnica/index",
     "📱 Ars Technica - Tech Policy": "https://feeds.arstechnica.com/arstechnica/tech-policy",
-    "📱 Wired": "https://www.wired.com/feed/rss",
-    "📱 Engadget": "https://www.engadget.com/rss.xml",
     
     # ============ CYBERSECURITY ============
     # Cyber Security News (Very Active)
