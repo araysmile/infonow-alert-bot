@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Alert Wire bot: fetch selected cyber/disaster feeds and post new items to Telegram.
+Alert Wire Bot v2.0: Upgraded with smart filtering, paywall blocking, and curated feeds
 
 Env vars required:
   - TELEGRAM_TOKEN       (from @BotFather)
@@ -18,7 +18,9 @@ import sys
 import json
 import time
 import argparse
+import re
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import requests
 import feedparser
@@ -26,74 +28,81 @@ from dateutil import parser as dateparser
 
 # --------- Configuration ---------
 
-# FEEDS: label -> RSS/Atom URL
+# Paywall domains to auto-skip
+PAYWALL_DOMAINS = [
+    "washingtonpost.com",
+    "nytimes.com",
+    "wsj.com",
+    "ft.com",
+    "economist.com",
+    "bloomberg.com",
+    "thetimes.co.uk",
+    "telegraph.co.uk",
+]
+
+# Sports keywords to filter out (case-insensitive)
+SPORTS_KEYWORDS = [
+    "nfl", "nba", "mlb", "nhl", "fifa", "uefa", "premier league",
+    "champions league", "world cup", "super bowl", "playoffs",
+    "football", "basketball", "baseball", "hockey", "soccer",
+    "espn", "sports", "game", "match", "score", "team wins",
+    "quarterback", "touchdown", "goal", "championship"
+]
+
+# High-priority keywords (for severity scoring)
+HIGH_PRIORITY_KEYWORDS = [
+    "zero-day", "critical vulnerability", "ransomware attack", "data breach",
+    "arrested", "indicted", "sentenced", "convicted", "corruption",
+    "earthquake", "tsunami", "hurricane", "tornado", "disaster",
+    "emergency", "breaking", "major incident", "explosion", "shooting",
+    "fraud", "scam", "hack", "exploit", "leaked", "exposed"
+]
+
+# FEEDS: Organized and curated
 FEEDS = {
-    # ============ BREAKING NEWS & GENERAL ============
-    # Major News (Reuters/AP via workarounds)
-    "📰 Reuters (24h)": "https://news.google.com/rss/search?q=when:24h+allinurl:reuters.com&ceid=US:en&hl=en-US&gl=US",
-    "📰 Google News - Top Stories": "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
-    "📰 Google News - US": "https://news.google.com/rss/headlines/section/geo/United%20States?hl=en-US&gl=US&ceid=US:en",
+    # ============ BREAKING NEWS & INVESTIGATIVE ============
+    "📰 Reuters World": "https://rsshub.app/reuters/world",
+    "📰 BBC World": "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "📰 BBC Breaking": "https://feeds.bbci.co.uk/news/rss.xml",
+    "📰 AP News Top": "https://rsshub.app/apnews/topics/apf-topnews",
+    "📰 Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
     
     # Investigative Journalism (JUICY STUFF!)
     "🔍 ProPublica": "https://www.propublica.org/feeds/propublica/main",
     "🔍 ProPublica - Criminal Justice": "https://www.propublica.org/topics/criminal-justice.rss",
     "🔍 The Intercept": "https://theintercept.com/feed/?rss",
     "🔍 Bellingcat": "https://www.bellingcat.com/feed/",
+    "🔍 MotherJones Investigations": "https://www.motherjones.com/politics/feed/",
+    "🔍 Wired Security": "https://www.wired.com/feed/category/security/latest/rss",
+    "🔍 Vice Motherboard": "https://www.vice.com/en/rss/topic/tech",
     
-    # Tech News (Drama & Scandals)
-    "📱 TechCrunch": "https://techcrunch.com/feed/",
-    "📱 Ars Technica": "https://feeds.arstechnica.com/arstechnica/index",
-    "📱 Ars Technica - Tech Policy": "https://feeds.arstechnica.com/arstechnica/tech-policy",
-    
-    # ============ CYBERSECURITY ============
-    # Cyber Security News (Very Active)
-    "🔥 The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
-    "🔥 BleepingComputer": "https://www.bleepingcomputer.com/feed/",
+    # ============ CYBERSECURITY (Curated - Best Sources) ============
     "🔥 Krebs on Security": "https://krebsonsecurity.com/feed/",
-    "🔥 SecurityWeek": "https://www.securityweek.com/feed/",
+    "🔥 BleepingComputer": "https://www.bleepingcomputer.com/feed/",
+    "🔥 The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
     "🔥 The Record": "https://therecord.media/feed",
-    "🔥 Threatpost": "https://threatpost.com/feed/",
-    "🔥 SecurityAffairs": "https://securityaffairs.com/feed",
-    "🔥 Graham Cluley": "https://grahamcluley.com/feed/",
+    "🔥 Dark Reading": "https://www.darkreading.com/rss.xml",
     "🔥 Schneier on Security": "https://www.schneier.com/feed/atom/",
-    "🔥 HackRead": "https://www.hackread.com/feed/",
-    "🔥 The Cyber Post": "https://thecyberpost.com/feed/",
-    "🔥 IT Security Guru": "https://www.itsecurityguru.org/feed/",
     
-    # Breaches & Incidents (Active)
+    # Breaches & Incidents
     "🧨 DataBreaches.net": "https://databreaches.net/feed/",
-    "🧨 UpGuard Breaches": "https://www.upguard.com/breaches/rss.xml",
     "🧨 HIBP Latest": "https://feeds.feedburner.com/HaveIBeenPwnedLatestBreaches",
     "🧨 Ransomware.live": "https://www.ransomware.live/rss.xml",
     "🧨 Troy Hunt": "https://www.troyhunt.com/rss/",
     
-    # Government & Critical Infrastructure (Medium Activity)
+    # Government & Critical Infrastructure
     "🛡️ CISA Advisories": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
     "🛡️ CISA Current Activity": "https://www.cisa.gov/news-events/cybersecurity-advisories/current-activity.xml",
     "🛡️ US-CERT Alerts": "https://www.cisa.gov/news-events/alerts.xml",
-    "🛡️ ICS-CERT": "https://www.cisa.gov/news-events/ics-advisories.xml",
     
-    # Threat Intelligence (Active)
-    "⚡ Malwarebytes Labs": "https://www.malwarebytes.com/blog/feed/index.xml",
-    "⚡ Talos Intelligence": "https://blog.talosintelligence.com/rss/",
-    "⚡ Unit 42": "https://unit42.paloaltonetworks.com/feed/",
+    # Threat Intelligence (Top Tier Only)
     "⚡ Mandiant": "https://www.mandiant.com/resources/blog/rss.xml",
     "⚡ CrowdStrike": "https://www.crowdstrike.com/blog/feed/",
     "⚡ Microsoft Security": "https://www.microsoft.com/en-us/security/blog/feed/",
     
-    # Vulnerabilities (Active)
+    # Vulnerabilities
     "🐛 Packet Storm": "https://packetstormsecurity.com/feeds/news/",
     "🐛 Exploit-DB": "https://www.exploit-db.com/rss.xml",
-    
-    # Malware Analysis
-    "🦠 Malware Traffic Analysis": "https://www.malware-traffic-analysis.net/blog-entries.rss",
-    "🦠 ANY.RUN": "https://any.run/cybersecurity-blog/feed/",
-    "🦠 Abuse.ch": "https://urlhaus.abuse.ch/rss/",
-    
-    # Internet Infrastructure
-    "🌐 NetBlocks": "https://netblocks.org/feed",
-    "🌐 Cloudflare Radar": "https://blog.cloudflare.com/rss/",
-    "🌐 SANS ISC": "https://isc.sans.edu/rssfeed.xml",
     
     # ============ AI / MACHINE LEARNING ============
     "🤖 OpenAI Blog": "https://openai.com/blog/rss.xml",
@@ -101,75 +110,56 @@ FEEDS = {
     "🤖 Google DeepMind": "https://deepmind.google/blog/rss.xml",
     "🤖 Meta AI": "https://ai.meta.com/blog/rss/",
     "🤖 Hugging Face": "https://huggingface.co/blog/feed.xml",
-    "🤖 Stability AI": "https://stability.ai/blog/rss.xml",
     "🤖 VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
     "🤖 TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "🤖 MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
-    "🤖 The Batch (DeepLearning.AI)": "https://www.deeplearning.ai/the-batch/feed/",
     
-    # ============ OPEN SOURCE ============
-    "⭐ GitHub Trending": "https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml",
-    "⭐ GitHub Python": "https://mshibanami.github.io/GitHubTrendingRSS/daily/python.xml",
-    "⭐ GitHub Java": "https://mshibanami.github.io/GitHubTrendingRSS/daily/java.xml",
-    "⭐ Linux Kernel": "https://www.kernel.org/feeds/kdist.xml",
-    "⭐ Python Insider": "https://blog.python.org/feeds/posts/default",
+    # ============ OPEN SOURCE & TOOLS ============
+    "⭐ Product Hunt": "https://www.producthunt.com/feed",
+    "⭐ Hacker News (Show HN)": "https://hnrss.org/show",
+    "⭐ Privacy Guides": "https://www.privacyguides.org/blog/feed.xml",
+    "⭐ AlternativeTo News": "https://alternativeto.net/news/feed/",
+    "⭐ Self-Hosted": "https://selfhosted.libhunt.com/newsletter/feed",
     "⭐ OpenSSF Blog": "https://openssf.org/blog/feed/",
-    "⭐ The Linux Foundation": "https://www.linuxfoundation.org/feed",
     
-    # ============ HARDWARE HACKING ============
-    "🔧 Hackaday": "https://hackaday.com/feed/",
-    "🔧 Raspberry Pi Blog": "https://www.raspberrypi.com/news/feed/",
-    "🔧 Arduino Blog": "https://blog.arduino.cc/feed/",
-    "🔧 Adafruit Blog": "https://blog.adafruit.com/feed/",
-    "🔧 SparkFun News": "https://www.sparkfun.com/feeds/news",
-    "🔧 CNX Software": "https://www.cnx-software.com/feed/",
-    "🔧 Hackster.io": "https://www.hackster.io/blog.rss",
-    
-    # ============ CRYPTO SECURITY ============
-    "₿ Rekt News": "https://rekt.news/rss.xml",
-    "₿ CertiK Alerts": "https://www.certik.com/resources/blog/rss.xml",
-    "₿ SlowMist": "https://slowmist.medium.com/feed",
-    "₿ Blockchain Graveyard": "https://magoo.github.io/Blockchain-Graveyard/feed.xml",
-    "₿ Coindesk Security": "https://www.coindesk.com/arc/outboundfeeds/rss/category/tech/security/",
-    "₿ The Block Security": "https://www.theblock.co/rss.xml",
-
-  # Critical Infrastructure & Government
-"🛡️ FBI Cyber Division": "https://www.fbi.gov/news/stories/cyber",
-"🛡️ NSA Cybersecurity": "https://www.nsa.gov/Press-Room/Press-Releases-Statements/RSS/",
-
-# Serious Security Research
-"🔥 Dark Reading": "https://www.darkreading.com/rss.xml",
-"🔥 Risky Business": "https://risky.biz/feeds/risky-business/",
-
-# Investigative/Deep Dives (low volume, high quality)
-"🔍 Krebs on Security": "https://krebsonsecurity.com/feed/",  # Already have this - KEEP IT
-"🔍 Wired Security": "https://www.wired.com/feed/category/security/latest/rss",
-"🔍 Vice Motherboard": "https://www.vice.com/en/rss/topic/tech",
-
-# Breaking News (actual breaking news)
-"📰 BBC Breaking": "https://feeds.bbci.co.uk/news/rss.xml",
-"📰 AP News": "https://rsshub.app/apnews/topics/apf-topnews",
+    # ============ ENTERTAINMENT & DRAMA ============
+    "🎤 TMZ": "https://www.tmz.com/rss.xml",
+    "🎤 The Shade Room": "https://theshaderoom.com/feed/",
+    "🎤 XXL Magazine": "https://www.xxlmag.com/feed/",
+    "🎤 HipHopDX": "https://hiphopdx.com/feed",
+    "🎤 Complex Music": "https://www.complex.com/music/rss",
+    "🎤 AllHipHop": "https://allhiphop.com/feed/",
+    "🎤 Page Six": "https://pagesix.com/feed/",
+    "🎤 Hollywood Reporter": "https://www.hollywoodreporter.com/feed/",
+    "🎤 Variety": "https://variety.com/feed/",
     
     # ============ FINANCIAL CRIMES & WHITE COLLAR ============
     "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
-    "💰 DOJ Press Releases": "https://www.justice.gov/feeds/opa/topic/financial-fraud.xml",
+    "💰 DOJ Financial Fraud": "https://www.justice.gov/feeds/opa/topic/financial-fraud.xml",
     "💰 FBI Financial Fraud": "https://www.fbi.gov/feeds/fbi-in-the-news/fbi-in-the-news.xml",
     "💰 FTC Consumer Alerts": "https://www.consumer.ftc.gov/feeds/articles.xml",
     "💰 CFTC Press Releases": "https://www.cftc.gov/rss/PressReleases/rss.xml",
     "💰 IRS Criminal Investigation": "https://www.irs.gov/rss/irs-criminal-investigation-newsroom",
+    "💰 OpenSecrets": "https://www.opensecrets.org/news/feed/",
     
-    # ============ LAW ENFORCEMENT & DRUG BUSTS ============
+    # ============ LAW ENFORCEMENT & CORRUPTION ============
     "🚔 DEA Press Releases": "https://www.dea.gov/rss/press-releases.xml",
     "🚔 DOJ Drug Enforcement": "https://www.justice.gov/feeds/opa/topic/drug-enforcement.xml",
     "🚔 FBI Press Releases": "https://www.fbi.gov/feeds/press-releases/press-releases.xml",
     "🚔 DOJ Public Integrity": "https://www.justice.gov/feeds/opa/topic/public-integrity.xml",
     "🚔 DOJ Organized Crime": "https://www.justice.gov/feeds/opa/topic/organized-crime.xml",
+    "🚔 Courthouse News": "https://www.courthousenews.com/feed/",
+    "🚔 The Appeal": "https://theappeal.org/feed/",
+    
+    # ============ CRYPTO (Only Major Scams/Hacks) ============
+    "₿ Rekt News": "https://rekt.news/rss.xml",
     
     # ============ NATURAL DISASTERS ============
     "🌋 USGS Significant Earthquakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.atom",
     "🌊 NOAA Tsunami Alerts": "https://www.tsunami.gov/events/xml/atom10.xml",
-    "🌀 NHC Atlantic Advisories": "https://www.nhc.noaa.gov/nhc_at.xml",
-    "🌀 NHC Eastern Pacific Advisories": "https://www.nhc.noaa.gov/nhc_ep.xml",
+    "🌀 NHC Atlantic": "https://www.nhc.noaa.gov/nhc_at.xml",
+    "🌀 NHC Eastern Pacific": "https://www.nhc.noaa.gov/nhc_ep.xml",
+    "🌍 ReliefWeb Disasters": "https://reliefweb.int/rss.xml",
 }
 
 # NWS severe/extreme alerts (US)
@@ -178,7 +168,10 @@ NWS_URL = (
     "?status=actual&message_type=Alert,Update&severity=Severe,Extreme"
 )
 
-USER_AGENT = "infonow-alert-bot/1.0 (+https://github.com)"
+USER_AGENT = "infonow-alert-bot/2.0 (+https://github.com)"
+
+# Persistent storage for seen items (to avoid duplicates across runs)
+SEEN_FILE = Path.home() / ".alert_bot_seen.json"
 
 # --------- Utilities ---------
 
@@ -191,6 +184,77 @@ def getenv_required(name: str) -> str:
     if not v:
         raise RuntimeError(f"Missing required env var: {name}")
     return v
+
+
+def load_seen_items() -> set:
+    """Load previously seen item IDs from disk."""
+    if not SEEN_FILE.exists():
+        return set()
+    try:
+        with open(SEEN_FILE, 'r') as f:
+            data = json.load(f)
+            # Clean old items (older than 7 days)
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).timestamp()
+            cleaned = {k: v for k, v in data.items() if v > cutoff}
+            return set(cleaned.keys())
+    except Exception as e:
+        log(f"Error loading seen items: {e}")
+        return set()
+
+
+def save_seen_items(seen: set) -> None:
+    """Save seen item IDs to disk with timestamps."""
+    try:
+        # Load existing data
+        existing = {}
+        if SEEN_FILE.exists():
+            with open(SEEN_FILE, 'r') as f:
+                existing = json.load(f)
+        
+        # Add new items with current timestamp
+        now = datetime.now(timezone.utc).timestamp()
+        for item_id in seen:
+            if item_id not in existing:
+                existing[item_id] = now
+        
+        # Clean old items (older than 7 days)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).timestamp()
+        cleaned = {k: v for k, v in existing.items() if v > cutoff}
+        
+        # Save
+        SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SEEN_FILE, 'w') as f:
+            json.dump(cleaned, f)
+    except Exception as e:
+        log(f"Error saving seen items: {e}")
+
+
+def is_paywall(url: str) -> bool:
+    """Check if URL is from a known paywall site."""
+    url_lower = url.lower()
+    return any(domain in url_lower for domain in PAYWALL_DOMAINS)
+
+
+def contains_sports(text: str) -> bool:
+    """Check if text contains sports-related keywords."""
+    text_lower = text.lower()
+    return any(keyword in text_lower for keyword in SPORTS_KEYWORDS)
+
+
+def calculate_priority(title: str, content: str = "") -> int:
+    """Calculate priority score (higher = more important)."""
+    text = (title + " " + content).lower()
+    score = 0
+    
+    for keyword in HIGH_PRIORITY_KEYWORDS:
+        if keyword in text:
+            score += 10
+    
+    # Boost for certain source indicators
+    if any(word in text for word in ["breaking", "urgent", "critical", "emergency"]):
+        score += 20
+    
+    return score
 
 
 def send_telegram(token: str, chat_id: str, html_text: str, disable_preview: bool = False) -> None:
@@ -207,7 +271,7 @@ def send_telegram(token: str, chat_id: str, html_text: str, disable_preview: boo
         if r.status_code != 200:
             log("Telegram non-200:", r.status_code, r.text[:300])
         else:
-            log("✓ Sent message successfully")
+            log("✓ Sent message")
     except Exception as e:
         log("Telegram error:", repr(e))
 
@@ -224,17 +288,13 @@ def is_recent(dt_str: str, window_minutes: int) -> bool:
             dt = dt.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         age_minutes = (now - dt).total_seconds() / 60
-        is_new = age_minutes <= window_minutes
-        if is_new:
-            log(f"  → Item age: {age_minutes:.1f} min (RECENT)")
-        return is_new
+        return age_minutes <= window_minutes
     except Exception as e:
-        log(f"  → Date parse error: {repr(e)}")
         return False
 
 
 def entry_id(entry) -> str:
-    """Best-effort stable id for an RSS entry (used for de-duping within a run)."""
+    """Best-effort stable id for an RSS entry."""
     return (
         getattr(entry, "id", None)
         or getattr(entry, "guid", None)
@@ -245,10 +305,10 @@ def entry_id(entry) -> str:
 
 # --------- Sources ---------
 
-def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool) -> None:
-    """Fetch all configured RSS/Atom feeds and post items."""
-    seen = set()
+def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool, seen: set) -> int:
+    """Fetch all configured RSS/Atom feeds and post items. Returns count of sent messages."""
     total_sent = 0
+    new_items = []  # Collect items with priority scores
     
     for label, url in FEEDS.items():
         try:
@@ -264,44 +324,72 @@ def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool
                     title = getattr(e, "title", "") or "New item"
                     published = getattr(e, "published", "") or getattr(e, "updated", "") or "No date"
                     if link:
-                        msg = f"[DEBUG SAMPLE] {label}\n<b>{title}</b>\n📅 {published}\n<a href=\"{link}\">Read more</a>"
+                        msg = f"[DEBUG] {label}\n<b>{title}</b>\n📅 {published}\n<a href=\"{link}\">Read more</a>"
                         send_telegram(token, chat_id, msg)
                         total_sent += 1
                 continue
 
-            # Normal mode: only items within window, de-dup by id within this run.
-            recent_count = 0
+            # Normal mode: filter and score items
             for e in entries:
                 eid = entry_id(e)
                 if eid in seen:
                     continue
-                seen.add(eid)
 
-                published = getattr(e, "published", "") or getattr(e, "updated", "") or ""
-                if not is_recent(published, window_minutes):
-                    continue
-
-                recent_count += 1
                 title = getattr(e, "title", "") or "New item"
                 link = getattr(e, "link", "") or ""
+                published = getattr(e, "published", "") or getattr(e, "updated", "") or ""
+                summary = getattr(e, "summary", "") or ""
+                
                 if not link:
                     continue
-
-                msg = f"{label}\n<b>{title}</b>\n<a href=\"{link}\">Read more</a>"
-                send_telegram(token, chat_id, msg)
-                total_sent += 1
-            
-            if recent_count > 0:
-                log(f"  Found {recent_count} recent items")
+                
+                # Filter paywall sites
+                if is_paywall(link):
+                    log(f"  ⊗ Skipped (paywall): {title[:50]}")
+                    continue
+                
+                # Filter sports
+                if contains_sports(title + " " + summary):
+                    log(f"  ⊗ Skipped (sports): {title[:50]}")
+                    continue
+                
+                # Check if recent
+                if not is_recent(published, window_minutes):
+                    continue
+                
+                # Calculate priority
+                priority = calculate_priority(title, summary)
+                
+                # Add to new items
+                seen.add(eid)
+                new_items.append({
+                    'label': label,
+                    'title': title,
+                    'link': link,
+                    'priority': priority
+                })
 
         except Exception as ex:
             log(f"  ERROR: {repr(ex)}")
     
-    log(f"RSS check complete. Sent {total_sent} alerts.")
+    # Sort by priority (highest first) and send
+    new_items.sort(key=lambda x: x['priority'], reverse=True)
+    
+    for item in new_items:
+        priority_marker = "🔥 " if item['priority'] >= 20 else ""
+        msg = f"{priority_marker}{item['label']}\n<b>{item['title']}</b>\n<a href=\"{item['link']}\">Read more</a>"
+        send_telegram(token, chat_id, msg)
+        total_sent += 1
+    
+    if new_items:
+        log(f"Found {len(new_items)} recent items (after filtering)")
+    
+    return total_sent
 
 
-def check_nws_severe(token: str, chat_id: str, window_minutes: int, debug: bool) -> None:
-    """Fetch US severe/extreme weather alerts from NWS."""
+def check_nws_severe(token: str, chat_id: str, window_minutes: int, debug: bool) -> int:
+    """Fetch US severe/extreme weather alerts from NWS. Returns count of sent messages."""
+    total_sent = 0
     try:
         log("Checking: ⚠️ NWS Severe Weather")
         r = requests.get(
@@ -311,13 +399,12 @@ def check_nws_severe(token: str, chat_id: str, window_minutes: int, debug: bool)
         )
         if r.status_code != 200:
             log(f"  NWS non-200: {r.status_code}")
-            return
+            return 0
 
         data = r.json()
         feats = data.get("features", []) if isinstance(data, dict) else []
         log(f"  Active severe/extreme alerts: {len(feats)}")
 
-        # Debug: send up to 2 samples (if any exist)
         if debug:
             for feat in feats[:2]:
                 p = feat.get("properties", {}) if isinstance(feat, dict) else {}
@@ -325,30 +412,29 @@ def check_nws_severe(token: str, chat_id: str, window_minutes: int, debug: bool)
                 area = p.get("areaDesc", "")
                 ts = p.get("sent") or p.get("effective") or "Unknown time"
                 link = p.get("uri") or p.get("id") or "https://www.weather.gov/alerts"
-                msg = f"[DEBUG SAMPLE] ⚠️ SEVERE WEATHER (US)\n<b>{event}</b>\n📍 {area[:140]}\n📅 {ts}\n<a href=\"{link}\">Details</a>"
+                msg = f"[DEBUG] ⚠️ SEVERE WEATHER (US)\n<b>{event}</b>\n📍 {area[:140]}\n📅 {ts}\n<a href=\"{link}\">Details</a>"
                 send_telegram(token, chat_id, msg, disable_preview=True)
-            return
+                total_sent += 1
+            return total_sent
 
-        # Normal: only alerts whose timestamps are within window
-        recent_count = 0
+        # Normal: only recent alerts
         for feat in feats:
             p = feat.get("properties", {}) if isinstance(feat, dict) else {}
             ts = p.get("sent") or p.get("effective") or p.get("onset") or ""
             if not is_recent(ts, window_minutes):
                 continue
             
-            recent_count += 1
             event = p.get("event", "NWS Alert")
             area = p.get("areaDesc", "")
             link = p.get("uri") or p.get("id") or "https://www.weather.gov/alerts"
-            msg = f"⚠️ SEVERE WEATHER (US)\n<b>{event}</b>\n📍 {area[:140]}\n<a href=\"{link}\">Details</a>"
+            msg = f"🔥 ⚠️ SEVERE WEATHER (US)\n<b>{event}</b>\n📍 {area[:140]}\n<a href=\"{link}\">Details</a>"
             send_telegram(token, chat_id, msg, disable_preview=True)
-        
-        if recent_count > 0:
-            log(f"  Found {recent_count} recent alerts")
+            total_sent += 1
 
     except Exception as e:
         log(f"  ERROR: {repr(e)}")
+    
+    return total_sent
 
 
 # --------- Main ---------
@@ -371,7 +457,6 @@ def main():
         chat_id = getenv_required("TELEGRAM_CHAT_ID")
     except Exception as e:
         log("Missing envs:", repr(e))
-        # Exit 0 to avoid failing the workflow; but nothing else to do.
         return 0
 
     try:
@@ -380,25 +465,32 @@ def main():
         window_minutes = 30
 
     log("=" * 60)
-    log(f"Alert Bot Starting")
+    log(f"Alert Bot v2.0 Starting")
     log(f"Window: {window_minutes} minutes | Debug: {args.debug}")
     log(f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
     log("=" * 60)
 
-    # RSS / Atom sources
-    check_rss_sources(token, chat_id, window_minutes, args.debug)
+    # Load seen items
+    seen = load_seen_items()
+    log(f"Loaded {len(seen)} previously seen items")
 
-    # US severe/extreme weather
-    check_nws_severe(token, chat_id, window_minutes, args.debug)
+    # Check all sources
+    rss_sent = check_rss_sources(token, chat_id, window_minutes, args.debug, seen)
+    nws_sent = check_nws_severe(token, chat_id, window_minutes, args.debug)
+    
+    total_sent = rss_sent + nws_sent
+
+    # Save seen items
+    if not args.debug:
+        save_seen_items(seen)
 
     log("=" * 60)
-    log("Run complete.")
+    log(f"Run complete. Sent {total_sent} alerts.")
     log("=" * 60)
     return 0
 
 
 if __name__ == "__main__":
-    # Never crash the workflow: log any top-level error and exit 0.
     try:
         sys.exit(main())
     except Exception as e:
