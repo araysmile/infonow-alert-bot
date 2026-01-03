@@ -132,18 +132,36 @@ FEEDS = {
     # ============ ENTERTAINMENT & DRAMA (JUICY GOSSIP!) ============
     "🎤 The Shade Room": "https://theshaderoom.com/feed/",
     "🎤 Media Take Out": "https://mediatakeout.com/feed/",
+    "🎤 WorldStarHipHop": "https://worldstarhiphop.com/videos/rss.php",
     "🎤 Hot 97": "https://hot97.com/feed/",
     "🎤 TMZ": "https://www.tmz.com/rss.xml",
     "🎤 Page Six": "https://pagesix.com/feed/",
     "🎤 The Mirror (Celebrity)": "https://www.themirror.com/all-about/celebrity-news?service=rss",
     "🎤 The Jasmine Brand": "https://thejasminebrand.com/feed/",
     "🎤 Bossip": "https://bossip.com/feed/",
+    "🎤 The YBF": "https://www.theybf.com/feed",
+    "🎤 Vibe Magazine": "https://www.vibe.com/feed/",
+    "🎤 The Source": "https://thesource.com/feed/",
     "🎤 XXL Magazine": "https://www.xxlmag.com/feed/",
     "🎤 HipHopDX": "https://hiphopdx.com/feed",
     "🎤 Complex Music": "https://www.complex.com/music/rss",
     "🎤 AllHipHop": "https://allhiphop.com/feed/",
     "🎤 Rap-Up": "https://www.rap-up.com/feed/",
     "🎤 The Breakfast Club": "https://www.iheart.com/podcast/the-breakfast-club-24992238/rss/",
+    "🎤 Perez Hilton": "https://perezhilton.com/feed/",
+    "🎤 Daily Mail Celebrity": "https://www.dailymail.co.uk/tvshowbiz/index.rss",
+    "🎤 Crazy Days and Nights": "https://www.crazydaysandnights.net/feeds/posts/default",
+    "🎤 Dlisted": "https://dlisted.com/feed/",
+    
+    # ============ SOCIAL MEDIA DRAMA ============
+    "📱 Pop Crave": "https://popcrave.com/feed/",
+    "📱 The Neighborhood Talk": "https://theneighborhoodtalk.com/feed/",
+    "📱 Hollywood Unlocked": "https://hollywoodunlocked.com/feed/",
+    
+    # ============ TRUE CRIME & LEGAL DRAMA ============
+    "⚖️ Crime Online": "https://www.crimeonline.com/feed/",
+    "⚖️ Law & Crime": "https://lawandcrime.com/feed/",
+    "⚖️ Oxygen True Crime": "https://www.oxygen.com/feed",
     
     # ============ FINANCIAL CRIMES & WHITE COLLAR ============
     "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
