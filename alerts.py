@@ -49,6 +49,13 @@ SPORTS_KEYWORDS = [
     "quarterback", "touchdown", "goal", "championship"
 ]
 
+# Boring/generic keywords to filter (unless high priority)
+BORING_KEYWORDS = [
+    "trade deal", "economic summit", "diplomatic visit",
+    "bilateral talks", "policy speech", "routine meeting",
+    "annual report", "quarterly earnings", "market update",
+]
+
 # High-priority keywords (for severity scoring)
 HIGH_PRIORITY_KEYWORDS = [
     "zero-day", "critical vulnerability", "ransomware attack", "data breach",
@@ -61,13 +68,10 @@ HIGH_PRIORITY_KEYWORDS = [
 # FEEDS: Organized and curated
 FEEDS = {
     # ============ BREAKING NEWS & INVESTIGATIVE ============
-    "📰 Reuters World": "https://rsshub.app/reuters/world",
-    "📰 BBC World": "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "📰 BBC Breaking": "https://feeds.bbci.co.uk/news/rss.xml",
+    "📰 Reuters US": "https://rsshub.app/reuters/us",
     "📰 AP News Top": "https://rsshub.app/apnews/topics/apf-topnews",
-    "📰 Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
     
-    # Investigative Journalism (JUICY STUFF!)
+    # Investigative Journalism (NO HOLDS BARRED!)
     "🔍 ProPublica": "https://www.propublica.org/feeds/propublica/main",
     "🔍 ProPublica - Criminal Justice": "https://www.propublica.org/topics/criminal-justice.rss",
     "🔍 The Intercept": "https://theintercept.com/feed/?rss",
@@ -75,6 +79,8 @@ FEEDS = {
     "🔍 MotherJones Investigations": "https://www.motherjones.com/politics/feed/",
     "🔍 Wired Security": "https://www.wired.com/feed/category/security/latest/rss",
     "🔍 Vice Motherboard": "https://www.vice.com/en/rss/topic/tech",
+    "🔍 Rolling Stone Politics": "https://www.rollingstone.com/politics/feed/",
+    "🔍 The Daily Beast": "https://www.thedailybeast.com/feed",
     
     # ============ CYBERSECURITY (Curated - Best Sources) ============
     "🔥 Krebs on Security": "https://krebsonsecurity.com/feed/",
@@ -113,6 +119,7 @@ FEEDS = {
     "🤖 VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
     "🤖 TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "🤖 MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+    "🤖 The Mirror Tech": "https://www.themirror.com/all-about/tech-news?service=rss",
     
     # ============ OPEN SOURCE & TOOLS ============
     "⭐ Product Hunt": "https://www.producthunt.com/feed",
@@ -122,16 +129,21 @@ FEEDS = {
     "⭐ Self-Hosted": "https://selfhosted.libhunt.com/newsletter/feed",
     "⭐ OpenSSF Blog": "https://openssf.org/blog/feed/",
     
-    # ============ ENTERTAINMENT & DRAMA ============
-    "🎤 TMZ": "https://www.tmz.com/rss.xml",
+    # ============ ENTERTAINMENT & DRAMA (JUICY GOSSIP!) ============
     "🎤 The Shade Room": "https://theshaderoom.com/feed/",
+    "🎤 Media Take Out": "https://mediatakeout.com/feed/",
+    "🎤 Hot 97": "https://hot97.com/feed/",
+    "🎤 TMZ": "https://www.tmz.com/rss.xml",
+    "🎤 Page Six": "https://pagesix.com/feed/",
+    "🎤 The Mirror (Celebrity)": "https://www.themirror.com/all-about/celebrity-news?service=rss",
+    "🎤 The Jasmine Brand": "https://thejasminebrand.com/feed/",
+    "🎤 Bossip": "https://bossip.com/feed/",
     "🎤 XXL Magazine": "https://www.xxlmag.com/feed/",
     "🎤 HipHopDX": "https://hiphopdx.com/feed",
     "🎤 Complex Music": "https://www.complex.com/music/rss",
     "🎤 AllHipHop": "https://allhiphop.com/feed/",
-    "🎤 Page Six": "https://pagesix.com/feed/",
-    "🎤 Hollywood Reporter": "https://www.hollywoodreporter.com/feed/",
-    "🎤 Variety": "https://variety.com/feed/",
+    "🎤 Rap-Up": "https://www.rap-up.com/feed/",
+    "🎤 The Breakfast Club": "https://www.iheart.com/podcast/the-breakfast-club-24992238/rss/",
     
     # ============ FINANCIAL CRIMES & WHITE COLLAR ============
     "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
@@ -239,6 +251,14 @@ def contains_sports(text: str) -> bool:
     """Check if text contains sports-related keywords."""
     text_lower = text.lower()
     return any(keyword in text_lower for keyword in SPORTS_KEYWORDS)
+
+
+def is_boring(text: str, priority: int) -> bool:
+    """Check if text is boring/generic (unless it's high priority)."""
+    if priority >= 20:  # High priority overrides boring filter
+        return False
+    text_lower = text.lower()
+    return any(keyword in text_lower for keyword in BORING_KEYWORDS)
 
 
 def calculate_priority(title: str, content: str = "") -> int:
@@ -359,6 +379,11 @@ def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool
                 
                 # Calculate priority
                 priority = calculate_priority(title, summary)
+                
+                # Filter boring content (unless high priority)
+                if is_boring(title + " " + summary, priority):
+                    log(f"  ⊗ Skipped (boring): {title[:50]}")
+                    continue
                 
                 # Add to new items
                 seen.add(eid)
