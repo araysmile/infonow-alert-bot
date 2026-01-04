@@ -49,11 +49,85 @@ SPORTS_KEYWORDS = [
     "quarterback", "touchdown", "goal", "championship"
 ]
 
-# Boring/generic keywords to filter (unless high priority)
+# Boring/generic keywords to filter (unless high priority or viral)
 BORING_KEYWORDS = [
+    # Kids/babies (unless adults in legal trouble)
+    "baby bump", "pregnancy announcement", "gender reveal",
+    "expecting baby", "growing up so fast", "first child",
+    "baby shower", "maternity photos", "newborn",
+    
+    # Pets  
+    "new puppy", "new dog", "new cat", "pet adoption",
+    "adopted a dog", "rescue dog", "fur baby",
+    
+    # Weak romance/fluff
+    "holding hands", "spotted holding hands", "hand in hand",
+    "couple goals", "relationship goals", "anniversary celebration",
+    "date night stroll", "romantic getaway",
+    
+    # Male thirst traps
+    "goes shirtless", "shows off abs", "flexes muscles",
+    "ripped physique", "muscular body", "workout video",
+    
+    # Boring transformations
+    "weight loss journey", "lost weight", "slimmed down",
+    "new hair color", "dyed hair", "hair transformation",
+    "post-baby body", "fitness journey",
+    
+    # Generic/boring outings  
+    "goes shopping", "spotted shopping", "casual outing",
+    "grabs coffee", "runs errands", "low-key outing",
+    "spotted at airport", "leaves gym",
+    
+    # Boring fashion (unless viral/roasted)
+    "stunning gown", "elegant dress", "chic outfit",
+    "fashion forward", "style icon", "red carpet ready",
+    
+    # UK-specific boring content
+    "molly mae", "love island", "towie", "made in chelsea",
+    "charlotte dawson", "gemma collins", "katie price",
+    
+    # Trade deals, world politics
     "trade deal", "economic summit", "diplomatic visit",
     "bilateral talks", "policy speech", "routine meeting",
     "annual report", "quarterly earnings", "market update",
+]
+
+# JUICE - Keep these even if boring keywords present (OVERRIDES trash filter)
+JUICE_KEYWORDS = [
+    # Viral/breaking internet
+    "breaking internet", "breaks internet", "viral", "trending",
+    "fans go wild", "fans react", "internet explodes",
+    "social media erupts", "twitter explodes",
+    
+    # Drama/beef
+    "beef", "diss track", "diss", "responds to", "claps back",
+    "calls out", "drama", "feud", "fight", "altercation",
+    
+    # Roasting/dragging
+    "getting dragged", "roasted", "clowned", "backlash",
+    "fans roast", "getting slammed", "criticized", "trolled",
+    
+    # Scandals/legal
+    "arrested", "lawsuit", "sued", "charges", "court",
+    "leaked", "exposed", "scandal", "controversy",
+    "investigation", "indicted", "sentenced",
+    
+    # Relationships (when juicy)
+    "cheating", "affair", "breakup", "split", "divorce",
+    "caught", "spotted with", "new relationship",
+    
+    # Women content (when viral)
+    "stuns", "shows off", "flaunts", "poses", "serves",
+    "thirst trap", "sexy", "hot", "fire",
+    
+    # Music/tours
+    "tour announcement", "tour dates", "announces tour",
+    "new album", "drops album", "releases", "behind the scenes",
+    "studio session", "new music", "new single",
+    
+    # Black women dating (always keep)
+    "dating", "boyfriend", "relationship", "spotted with",
 ]
 
 # High-priority keywords (for severity scoring)
@@ -119,7 +193,6 @@ FEEDS = {
     "🤖 VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
     "🤖 TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "🤖 MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
-    "🤖 The Mirror Tech": "https://www.themirror.com/all-about/tech-news?service=rss",
     
     # ============ OPEN SOURCE & TOOLS ============
     "⭐ Product Hunt": "https://www.producthunt.com/feed",
@@ -136,27 +209,33 @@ FEEDS = {
     "🎤 Hot 97": "https://hot97.com/feed/",
     "🎤 TMZ": "https://www.tmz.com/rss.xml",
     "🎤 Page Six": "https://pagesix.com/feed/",
-    "🎤 The Mirror (Celebrity)": "https://www.themirror.com/all-about/celebrity-news?service=rss",
     "🎤 The Jasmine Brand": "https://thejasminebrand.com/feed/",
     "🎤 Bossip": "https://bossip.com/feed/",
     "🎤 The YBF": "https://www.theybf.com/feed",
-    "🎤 Vibe Magazine": "https://www.vibe.com/feed/",
-    "🎤 The Source": "https://thesource.com/feed/",
-    "🎤 XXL Magazine": "https://www.xxlmag.com/feed/",
-    "🎤 HipHopDX": "https://hiphopdx.com/feed",
-    "🎤 Complex Music": "https://www.complex.com/music/rss",
-    "🎤 AllHipHop": "https://allhiphop.com/feed/",
-    "🎤 Rap-Up": "https://www.rap-up.com/feed/",
-    "🎤 The Breakfast Club": "https://www.iheart.com/podcast/the-breakfast-club-24992238/rss/",
     "🎤 Perez Hilton": "https://perezhilton.com/feed/",
-    "🎤 Daily Mail Celebrity": "https://www.dailymail.co.uk/tvshowbiz/index.rss",
     "🎤 Crazy Days and Nights": "https://www.crazydaysandnights.net/feeds/posts/default",
-    "🎤 Dlisted": "https://dlisted.com/feed/",
+    
+    # ============ HIP-HOP & R&B (URBAN MUSIC) ============
+    "🎵 Rap Radar": "https://rapradar.com/feed/",
+    "🎵 Hot New Hip Hop": "https://www.hotnewhiphop.com/rss",
+    "🎵 HipHopWired": "https://hiphopwired.com/feed/",
+    "🎵 Rated R&B": "https://www.rated-rnb.com/feed/",
+    "🎵 Vibe Magazine": "https://www.vibe.com/feed/",
+    "🎵 The Source": "https://thesource.com/feed/",
+    "🎵 XXL Magazine": "https://www.xxlmag.com/feed/",
+    "🎵 HipHopDX": "https://hiphopdx.com/feed",
+    "🎵 Complex Music": "https://www.complex.com/music/rss",
+    "🎵 AllHipHop": "https://allhiphop.com/feed/",
+    "🎵 Rap-Up": "https://www.rap-up.com/feed/",
+    "🎵 DJ Akademiks": "https://www.youtube.com/feeds/videos.xml?channel_id=UCWWbKkz0hS-w3VMkhS2t05g",
+    "🎵 No Jumper": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3mBYU96-qGd5FKkDS0frLQ",
+    "🎵 Say Cheese TV": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVg-jP2FvMNPPHZhp4D1dKA",
     
     # ============ SOCIAL MEDIA DRAMA ============
     "📱 Pop Crave": "https://popcrave.com/feed/",
     "📱 The Neighborhood Talk": "https://theneighborhoodtalk.com/feed/",
     "📱 Hollywood Unlocked": "https://hollywoodunlocked.com/feed/",
+    "📱 Black Twitter Trends": "https://rsshub.app/twitter/keyword/BlackTwitter",
     
     # ============ TRUE CRIME & LEGAL DRAMA ============
     "⚖️ Crime Online": "https://www.crimeonline.com/feed/",
@@ -272,10 +351,17 @@ def contains_sports(text: str) -> bool:
 
 
 def is_boring(text: str, priority: int) -> bool:
-    """Check if text is boring/generic (unless it's high priority)."""
+    """Check if text is boring/generic (unless it's high priority or has juice)."""
     if priority >= 20:  # High priority overrides boring filter
         return False
+    
     text_lower = text.lower()
+    
+    # Check if it has JUICE keywords (overrides boring)
+    if any(keyword in text_lower for keyword in JUICE_KEYWORDS):
+        return False
+    
+    # Now check if boring
     return any(keyword in text_lower for keyword in BORING_KEYWORDS)
 
 
