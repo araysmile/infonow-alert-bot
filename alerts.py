@@ -143,10 +143,17 @@ FEEDS = {
     "🎵 The Source": "https://thesource.com/feed/",
     "🎵 Rated R&B": "https://www.rated-rnb.com/feed/",
     
-    # YouTube hip-hop
-    "📺 DJ Akademiks": "https://www.youtube.com/feeds/videos.xml?channel_id=UCWWbKkz0hS-w3VMkhS2t05g",
-    "📺 No Jumper": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3mBYU96-qGd5FKkDS0frLQ",
-    "📺 Say Cheese TV": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVg-jP2FvMNPPHZhp4D1dKA",
+    # Top Black Twitter/Social accounts (via RSS bridges)
+    "🔥 TheShadeRoom Twitter": "https://rsshub.app/twitter/user/TheShadeRoom",
+    "🔥 MTO News Twitter": "https://rsshub.app/twitter/user/MTO_NEWS",
+    "🔥 TSR Staff Twitter": "https://rsshub.app/twitter/user/theshadetalk",
+    "🔥 Neighborhood Talk": "https://rsshub.app/twitter/user/itsneighborhoodtalk",
+    "🔥 Black Twitter": "https://rsshub.app/twitter/keyword/BlackTwitter",
+    "🔥 Hollywood Unlocked": "https://rsshub.app/twitter/user/HollywoodUnlockd",
+    "🔥 Gossip of the City": "https://rsshub.app/twitter/user/gossipofthecity",
+    "🔥 Akademiks Twitter": "https://rsshub.app/twitter/user/Akademiks",
+    "🔥 Rap Alert": "https://rsshub.app/twitter/user/rapalert6",
+    "🔥 Kurrco": "https://rsshub.app/twitter/user/kurrco",
     
     # === TRENDING/VIRAL ===
     "📱 Pop Crave": "https://popcrave.com/feed/",
