@@ -2,161 +2,184 @@
 # -*- coding: utf-8 -*-
 
 """
-Alert Wire Bot v2.0: Upgraded with smart filtering, paywall blocking, and curated feeds
+Alert Wire Bot v2.1 - Baltimore Edition
+Real-time alerts for: Black culture, hip-hop, ALL tech/AI launches, cybersecurity
 
 Env vars required:
-  - TELEGRAM_TOKEN       (from @BotFather)
-  - TELEGRAM_CHAT_ID     (numeric id, e.g. -100xxxxxxxxxx)
-  - WINDOW_MINUTES       (optional; default 30)
-
-CLI flags:
-  --debug   -> send a couple of sample items from each source even if they're old
+  - TELEGRAM_TOKEN
+  - TELEGRAM_CHAT_ID
+  - WINDOW_MINUTES (default: 45)
 """
 
-import os
-import sys
-import json
-import time
-import argparse
-import re
+import os, sys, json, argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-import requests
-import feedparser
+import requests, feedparser
 from dateutil import parser as dateparser
 
-# --------- Configuration ---------
+# ========== FILTERS ==========
 
-# Paywall domains to auto-skip
 PAYWALL_DOMAINS = [
-    "washingtonpost.com",
-    "nytimes.com",
-    "wsj.com",
-    "ft.com",
-    "economist.com",
-    "bloomberg.com",
-    "thetimes.co.uk",
-    "telegraph.co.uk",
+    "washingtonpost.com", "nytimes.com", "wsj.com", "ft.com",
+    "economist.com", "bloomberg.com", "thetimes.co.uk", "telegraph.co.uk",
 ]
 
-# Sports keywords to filter out (case-insensitive)
 SPORTS_KEYWORDS = [
-    "nfl", "nba", "mlb", "nhl", "fifa", "uefa", "premier league",
-    "champions league", "world cup", "super bowl", "playoffs",
-    "football", "basketball", "baseball", "hockey", "soccer",
-    "espn", "sports", "game", "match", "score", "team wins",
-    "quarterback", "touchdown", "goal", "championship"
+    "nfl game", "nba game", "mlb game", "nhl game", "uefa match",
+    "premier league score", "final score", "game recap", "playoff bracket"
 ]
 
-# Boring/generic keywords to filter (unless high priority or viral)
-BORING_KEYWORDS = [
-    # Kids/babies (unless adults in legal trouble)
+# TRASH - Skip this garbage immediately
+TRASH_KEYWORDS = [
+    "gay pride march", "pride parade budapest", "hungarian politics",
+    "brexit deal", "eu summit", "g7 meeting", "bilateral talks",
     "baby bump", "pregnancy announcement", "gender reveal",
-    "expecting baby", "growing up so fast", "first child",
-    "baby shower", "maternity photos", "newborn",
-    
-    # Pets  
-    "new puppy", "new dog", "new cat", "pet adoption",
-    "adopted a dog", "rescue dog", "fur baby",
-    
-    # Weak romance/fluff
-    "holding hands", "spotted holding hands", "hand in hand",
-    "couple goals", "relationship goals", "anniversary celebration",
-    "date night stroll", "romantic getaway",
-    
-    # Male thirst traps
-    "goes shirtless", "shows off abs", "flexes muscles",
-    "ripped physique", "muscular body", "workout video",
-    
-    # Boring transformations
-    "weight loss journey", "lost weight", "slimmed down",
-    "new hair color", "dyed hair", "hair transformation",
-    "post-baby body", "fitness journey",
-    
-    # Generic/boring outings  
-    "goes shopping", "spotted shopping", "casual outing",
-    "grabs coffee", "runs errands", "low-key outing",
-    "spotted at airport", "leaves gym",
-    
-    # Boring fashion (unless viral/roasted)
-    "stunning gown", "elegant dress", "chic outfit",
-    "fashion forward", "style icon", "red carpet ready",
-    
-    # UK-specific boring content
-    "molly mae", "love island", "towie", "made in chelsea",
-    "charlotte dawson", "gemma collins", "katie price",
-    
-    # Trade deals, world politics
-    "trade deal", "economic summit", "diplomatic visit",
-    "bilateral talks", "policy speech", "routine meeting",
-    "annual report", "quarterly earnings", "market update",
+    "new puppy", "adopted dog", "rescue cat", "fur baby",
+    "holding hands", "date night", "romantic stroll",
+    "goes shirtless", "shows off abs", "beach body",
+    "weight loss journey", "hair transformation",
+    "spotted shopping", "runs errands", "grabs coffee",
+    "love island uk", "towie", "molly mae", "katie price",
 ]
 
-# JUICE - Keep these even if boring keywords present (OVERRIDES trash filter)
+# JUICE - Always keep (overrides trash)
 JUICE_KEYWORDS = [
-    # Viral/breaking internet
-    "breaking internet", "breaks internet", "viral", "trending",
-    "fans go wild", "fans react", "internet explodes",
-    "social media erupts", "twitter explodes",
+    # Black culture
+    "black twitter", "black tiktok", "black community", "african american",
+    "baltimore", "bmore", "dmv", "charm city",
     
-    # Drama/beef
-    "beef", "diss track", "diss", "responds to", "claps back",
-    "calls out", "drama", "feud", "fight", "altercation",
+    # Music
+    "hip hop", "hip-hop", "rap", "trap", "drill", "r&b", "rnb",
     
-    # Roasting/dragging
-    "getting dragged", "roasted", "clowned", "backlash",
-    "fans roast", "getting slammed", "criticized", "trolled",
+    # Drama/viral
+    "viral", "trending", "breaking internet", "beef", "diss track",
+    "shots fired", "responds to", "claps back", "calls out", "drama",
+    "feud", "fight", "receipts", "exposed", "tea",
     
-    # Scandals/legal
-    "arrested", "lawsuit", "sued", "charges", "court",
-    "leaked", "exposed", "scandal", "controversy",
-    "investigation", "indicted", "sentenced",
+    # Getting dragged
+    "dragged", "roasted", "clowned", "backlash", "cancelled",
+    "ratio", "getting ratio'd",
     
-    # Relationships (when juicy)
-    "cheating", "affair", "breakup", "split", "divorce",
-    "caught", "spotted with", "new relationship",
+    # Scandals/crime
+    "arrested", "charges", "lawsuit", "indicted", "mugshot",
+    "leaked", "scandal", "investigation", "sentenced",
+    "cheating", "affair", "caught", "side chick", "baby mama",
     
-    # Women content (when viral)
-    "stuns", "shows off", "flaunts", "poses", "serves",
-    "thirst trap", "sexy", "hot", "fire",
+    # Music releases
+    "new album", "drops album", "new single", "tour announcement",
+    "collab", "featuring", "freestyle", "cypher", "diss",
     
-    # Music/tours
-    "tour announcement", "tour dates", "announces tour",
-    "new album", "drops album", "releases", "behind the scenes",
-    "studio session", "new music", "new single",
+    # Violence (awareness)
+    "shooting", "shot dead", "killed", "murder", "stabbed",
     
-    # Black women dating (always keep)
-    "dating", "boyfriend", "relationship", "spotted with",
+    # Deaths
+    "died", "dead", "death", "passed away", "rip", "funeral",
+    
+    # Tech/AI (EXPANDED)
+    "launches", "announces", "releases", "open source",
+    "github release", "new tool", "new model", "beta access",
+    "free tier", "waitlist open", "early access",
 ]
 
-# High-priority keywords (for severity scoring)
 HIGH_PRIORITY_KEYWORDS = [
-    "zero-day", "critical vulnerability", "ransomware attack", "data breach",
-    "arrested", "indicted", "sentenced", "convicted", "corruption",
-    "earthquake", "tsunami", "hurricane", "tornado", "disaster",
-    "emergency", "breaking", "major incident", "explosion", "shooting",
-    "fraud", "scam", "hack", "exploit", "leaked", "exposed"
+    # Cyber
+    "zero-day", "critical vulnerability", "ransomware", "data breach",
+    "hack", "exploit", "leaked data",
+    
+    # Tech launches
+    "announces", "launches", "unveils", "releases", "open source",
+    
+    # Crime
+    "arrested", "indicted", "sentenced", "charges", "mugshot",
+    
+    # Breaking
+    "breaking", "urgent", "developing", "just in",
+    
+    # Violence
+    "shooting", "killed", "stabbed", "attack",
+    
+    # Deaths
+    "died", "dead", "passed away",
 ]
 
-# FEEDS: Organized and curated
+# Black artists to boost
+BLACK_ARTISTS = [
+    "jay-z", "beyonce", "kanye", "ye", "drake", "kendrick", "j cole",
+    "nicki minaj", "cardi b", "megan thee stallion", "doja cat",
+    "travis scott", "future", "metro boomin", "21 savage",
+    "lil baby", "lil durk", "polo g", "rod wave", "nba youngboy",
+    "kodak black", "moneybagg yo", "est gee", "youngboy",
+    "usher", "chris brown", "trey songz", "summer walker",
+    "sza", "jhene aiko", "kehlani", "bryson tiller",
+    "king von", "pop smoke", "chief keef", "quando rondo",
+    "ice spice", "sexyy red", "latto", "glorilla", "doechii",
+    "joe budden", "akademiks", "dj vlad", "adam22", "boosie",
+]
+
+# ========== FEEDS ==========
+
 FEEDS = {
-    # ============ BREAKING NEWS & INVESTIGATIVE ============
-    "📰 Reuters US": "https://rsshub.app/reuters/us",
-    "📰 AP News Top": "https://rsshub.app/apnews/topics/apf-topnews",
+    # === BLACK CULTURE & HIP-HOP ===
+    "🎤 The Shade Room": "https://theshaderoom.com/feed/",
+    "🎤 Media Take Out": "https://mediatakeout.com/feed/",
+    "🎤 WorldStarHipHop": "https://worldstarhiphop.com/videos/rss.php",
+    "🎤 Hot 97": "https://hot97.com/feed/",
+    "🎤 The Jasmine Brand": "https://thejasminebrand.com/feed/",
+    "🎤 Bossip": "https://bossip.com/feed/",
+    "🎤 The YBF": "https://www.theybf.com/feed",
+    "🎤 Neighborhood Talk": "https://theneighborhoodtalk.com/feed/",
+    "🎤 Hollywood Unlocked": "https://hollywoodunlocked.com/feed/",
+    "🎤 Urban Islandz": "https://urbanislandz.com/feed/",
     
-    # Investigative Journalism (NO HOLDS BARRED!)
-    "🔍 ProPublica": "https://www.propublica.org/feeds/propublica/main",
-    "🔍 ProPublica - Criminal Justice": "https://www.propublica.org/topics/criminal-justice.rss",
-    "🔍 The Intercept": "https://theintercept.com/feed/?rss",
-    "🔍 Bellingcat": "https://www.bellingcat.com/feed/",
-    "🔍 MotherJones Investigations": "https://www.motherjones.com/politics/feed/",
-    "🔍 Wired Security": "https://www.wired.com/feed/category/security/latest/rss",
-    "🔍 Vice Motherboard": "https://www.vice.com/en/rss/topic/tech",
-    "🔍 Rolling Stone Politics": "https://www.rollingstone.com/politics/feed/",
-    "🔍 The Daily Beast": "https://www.thedailybeast.com/feed",
+    # === HIP-HOP MUSIC ===
+    "🎵 Rap Radar": "https://rapradar.com/feed/",
+    "🎵 Hot New Hip Hop": "https://www.hotnewhiphop.com/rss",
+    "🎵 HipHopWired": "https://hiphopwired.com/feed/",
+    "🎵 XXL Magazine": "https://www.xxlmag.com/feed/",
+    "🎵 HipHopDX": "https://hiphopdx.com/feed",
+    "🎵 Complex Music": "https://www.complex.com/music/rss",
+    "🎵 AllHipHop": "https://allhiphop.com/feed/",
+    "🎵 Rap-Up": "https://www.rap-up.com/feed/",
+    "🎵 The Source": "https://thesource.com/feed/",
+    "🎵 Rated R&B": "https://www.rated-rnb.com/feed/",
     
-    # ============ CYBERSECURITY (Curated - Best Sources) ============
+    # YouTube hip-hop
+    "📺 DJ Akademiks": "https://www.youtube.com/feeds/videos.xml?channel_id=UCWWbKkz0hS-w3VMkhS2t05g",
+    "📺 No Jumper": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3mBYU96-qGd5FKkDS0frLQ",
+    "📺 Say Cheese TV": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVg-jP2FvMNPPHZhp4D1dKA",
+    
+    # === TRENDING/VIRAL ===
+    "📱 Pop Crave": "https://popcrave.com/feed/",
+    "📱 TMZ": "https://www.tmz.com/rss.xml",
+    
+    # === AI & TECH (COMPREHENSIVE) ===
+    "🤖 OpenAI": "https://openai.com/blog/rss.xml",
+    "🤖 Anthropic": "https://www.anthropic.com/news/rss.xml",
+    "🤖 Google DeepMind": "https://deepmind.google/blog/rss.xml",
+    "🤖 Meta AI": "https://ai.meta.com/blog/rss/",
+    "🤖 Hugging Face": "https://huggingface.co/blog/feed.xml",
+    "🤖 TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "🤖 VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
+    "🤖 The Verge AI": "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",
+    "🤖 Ars Technica": "https://feeds.arstechnica.com/arstechnica/technology-lab",
+    "🤖 MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+    
+    # === TECH GEEK SOURCES ===
+    "⭐ Hacker News Front": "https://hnrss.org/frontpage",
+    "⭐ Hacker News Show": "https://hnrss.org/show",
+    "⭐ Product Hunt": "https://www.producthunt.com/feed",
+    "⭐ GitHub Trending": "https://rsshub.app/github/trending/daily",
+    "⭐ Reddit r/programming": "https://www.reddit.com/r/programming/.rss",
+    "⭐ Reddit r/netsec": "https://www.reddit.com/r/netsec/.rss",
+    "⭐ Reddit r/technology": "https://www.reddit.com/r/technology/.rss",
+    "⭐ Dev.to": "https://dev.to/feed",
+    
+    # === OPEN SOURCE ===
+    "🔧 Privacy Guides": "https://www.privacyguides.org/blog/feed.xml",
+    "🔧 AlternativeTo": "https://alternativeto.net/news/feed/",
+    "🔧 Self-Hosted": "https://selfhosted.libhunt.com/newsletter/feed",
+    
+    # === CYBERSECURITY ===
     "🔥 Krebs on Security": "https://krebsonsecurity.com/feed/",
     "🔥 BleepingComputer": "https://www.bleepingcomputer.com/feed/",
     "🔥 The Hacker News": "https://feeds.feedburner.com/TheHackersNews",
@@ -164,225 +187,134 @@ FEEDS = {
     "🔥 Dark Reading": "https://www.darkreading.com/rss.xml",
     "🔥 Schneier on Security": "https://www.schneier.com/feed/atom/",
     
-    # Breaches & Incidents
+    # Breaches
     "🧨 DataBreaches.net": "https://databreaches.net/feed/",
-    "🧨 HIBP Latest": "https://feeds.feedburner.com/HaveIBeenPwnedLatestBreaches",
+    "🧨 HIBP": "https://feeds.feedburner.com/HaveIBeenPwnedLatestBreaches",
     "🧨 Ransomware.live": "https://www.ransomware.live/rss.xml",
     "🧨 Troy Hunt": "https://www.troyhunt.com/rss/",
     
-    # Government & Critical Infrastructure
+    # Government
     "🛡️ CISA Advisories": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
-    "🛡️ CISA Current Activity": "https://www.cisa.gov/news-events/cybersecurity-advisories/current-activity.xml",
-    "🛡️ US-CERT Alerts": "https://www.cisa.gov/news-events/alerts.xml",
+    "🛡️ CISA Current": "https://www.cisa.gov/news-events/cybersecurity-advisories/current-activity.xml",
     
-    # Threat Intelligence (Top Tier Only)
+    # Threat Intel
     "⚡ Mandiant": "https://www.mandiant.com/resources/blog/rss.xml",
     "⚡ CrowdStrike": "https://www.crowdstrike.com/blog/feed/",
     "⚡ Microsoft Security": "https://www.microsoft.com/en-us/security/blog/feed/",
     
-    # Vulnerabilities
-    "🐛 Packet Storm": "https://packetstormsecurity.com/feeds/news/",
-    "🐛 Exploit-DB": "https://www.exploit-db.com/rss.xml",
-    
-    # ============ AI / MACHINE LEARNING ============
-    "🤖 OpenAI Blog": "https://openai.com/blog/rss.xml",
-    "🤖 Anthropic News": "https://www.anthropic.com/news/rss.xml",
-    "🤖 Google DeepMind": "https://deepmind.google/blog/rss.xml",
-    "🤖 Meta AI": "https://ai.meta.com/blog/rss/",
-    "🤖 Hugging Face": "https://huggingface.co/blog/feed.xml",
-    "🤖 VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
-    "🤖 TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
-    "🤖 MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
-    
-    # ============ OPEN SOURCE & TOOLS ============
-    "⭐ Product Hunt": "https://www.producthunt.com/feed",
-    "⭐ Hacker News (Show HN)": "https://hnrss.org/show",
-    "⭐ Privacy Guides": "https://www.privacyguides.org/blog/feed.xml",
-    "⭐ AlternativeTo News": "https://alternativeto.net/news/feed/",
-    "⭐ Self-Hosted": "https://selfhosted.libhunt.com/newsletter/feed",
-    "⭐ OpenSSF Blog": "https://openssf.org/blog/feed/",
-    
-    # ============ ENTERTAINMENT & DRAMA (JUICY GOSSIP!) ============
-    "🎤 The Shade Room": "https://theshaderoom.com/feed/",
-    "🎤 Media Take Out": "https://mediatakeout.com/feed/",
-    "🎤 WorldStarHipHop": "https://worldstarhiphop.com/videos/rss.php",
-    "🎤 Hot 97": "https://hot97.com/feed/",
-    "🎤 TMZ": "https://www.tmz.com/rss.xml",
-    "🎤 Page Six": "https://pagesix.com/feed/",
-    "🎤 The Jasmine Brand": "https://thejasminebrand.com/feed/",
-    "🎤 Bossip": "https://bossip.com/feed/",
-    "🎤 The YBF": "https://www.theybf.com/feed",
-    "🎤 Perez Hilton": "https://perezhilton.com/feed/",
-    "🎤 Crazy Days and Nights": "https://www.crazydaysandnights.net/feeds/posts/default",
-    
-    # ============ HIP-HOP & R&B (URBAN MUSIC) ============
-    "🎵 Rap Radar": "https://rapradar.com/feed/",
-    "🎵 Hot New Hip Hop": "https://www.hotnewhiphop.com/rss",
-    "🎵 HipHopWired": "https://hiphopwired.com/feed/",
-    "🎵 Rated R&B": "https://www.rated-rnb.com/feed/",
-    "🎵 Vibe Magazine": "https://www.vibe.com/feed/",
-    "🎵 The Source": "https://thesource.com/feed/",
-    "🎵 XXL Magazine": "https://www.xxlmag.com/feed/",
-    "🎵 HipHopDX": "https://hiphopdx.com/feed",
-    "🎵 Complex Music": "https://www.complex.com/music/rss",
-    "🎵 AllHipHop": "https://allhiphop.com/feed/",
-    "🎵 Rap-Up": "https://www.rap-up.com/feed/",
-    "🎵 DJ Akademiks": "https://www.youtube.com/feeds/videos.xml?channel_id=UCWWbKkz0hS-w3VMkhS2t05g",
-    "🎵 No Jumper": "https://www.youtube.com/feeds/videos.xml?channel_id=UC3mBYU96-qGd5FKkDS0frLQ",
-    "🎵 Say Cheese TV": "https://www.youtube.com/feeds/videos.xml?channel_id=UCVg-jP2FvMNPPHZhp4D1dKA",
-    
-    # ============ SOCIAL MEDIA DRAMA ============
-    "📱 Pop Crave": "https://popcrave.com/feed/",
-    "📱 The Neighborhood Talk": "https://theneighborhoodtalk.com/feed/",
-    "📱 Hollywood Unlocked": "https://hollywoodunlocked.com/feed/",
-    "📱 Black Twitter Trends": "https://rsshub.app/twitter/keyword/BlackTwitter",
-    
-    # ============ TRUE CRIME & LEGAL DRAMA ============
+    # === CRIME & LEGAL ===
     "⚖️ Crime Online": "https://www.crimeonline.com/feed/",
     "⚖️ Law & Crime": "https://lawandcrime.com/feed/",
-    "⚖️ Oxygen True Crime": "https://www.oxygen.com/feed",
     
-    # ============ FINANCIAL CRIMES & WHITE COLLAR ============
+    # === FINANCIAL CRIMES ===
     "💰 SEC Enforcement": "https://www.sec.gov/news/pressreleases.rss",
     "💰 DOJ Financial Fraud": "https://www.justice.gov/feeds/opa/topic/financial-fraud.xml",
-    "💰 FBI Financial Fraud": "https://www.fbi.gov/feeds/fbi-in-the-news/fbi-in-the-news.xml",
-    "💰 FTC Consumer Alerts": "https://www.consumer.ftc.gov/feeds/articles.xml",
-    "💰 CFTC Press Releases": "https://www.cftc.gov/rss/PressReleases/rss.xml",
-    "💰 IRS Criminal Investigation": "https://www.irs.gov/rss/irs-criminal-investigation-newsroom",
-    "💰 OpenSecrets": "https://www.opensecrets.org/news/feed/",
     
-    # ============ LAW ENFORCEMENT & CORRUPTION ============
-    "🚔 DEA Press Releases": "https://www.dea.gov/rss/press-releases.xml",
-    "🚔 DOJ Drug Enforcement": "https://www.justice.gov/feeds/opa/topic/drug-enforcement.xml",
-    "🚔 FBI Press Releases": "https://www.fbi.gov/feeds/press-releases/press-releases.xml",
-    "🚔 DOJ Public Integrity": "https://www.justice.gov/feeds/opa/topic/public-integrity.xml",
-    "🚔 DOJ Organized Crime": "https://www.justice.gov/feeds/opa/topic/organized-crime.xml",
-    "🚔 Courthouse News": "https://www.courthousenews.com/feed/",
-    "🚔 The Appeal": "https://theappeal.org/feed/",
+    # === LAW ENFORCEMENT ===
+    "🚔 FBI Press": "https://www.fbi.gov/feeds/press-releases/press-releases.xml",
+    "🚔 DEA Press": "https://www.dea.gov/rss/press-releases.xml",
     
-    # ============ CRYPTO (Only Major Scams/Hacks) ============
-    "₿ Rekt News": "https://rekt.news/rss.xml",
+    # === BREAKING NEWS (US) ===
+    "📰 Reuters US": "https://rsshub.app/reuters/us",
+    "📰 AP News": "https://rsshub.app/apnews/topics/apf-topnews",
     
-    # ============ NATURAL DISASTERS ============
-    "🌋 USGS Significant Earthquakes": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.atom",
-    "🌊 NOAA Tsunami Alerts": "https://www.tsunami.gov/events/xml/atom10.xml",
-    "🌀 NHC Atlantic": "https://www.nhc.noaa.gov/nhc_at.xml",
-    "🌀 NHC Eastern Pacific": "https://www.nhc.noaa.gov/nhc_ep.xml",
-    "🌍 ReliefWeb Disasters": "https://reliefweb.int/rss.xml",
+    # === INVESTIGATIVE ===
+    "🔍 ProPublica": "https://www.propublica.org/feeds/propublica/main",
+    "🔍 The Intercept": "https://theintercept.com/feed/?rss",
 }
 
-# NWS severe/extreme alerts (US)
-NWS_URL = (
-    "https://api.weather.gov/alerts/active"
-    "?status=actual&message_type=Alert,Update&severity=Severe,Extreme"
-)
-
-USER_AGENT = "infonow-alert-bot/2.0 (+https://github.com)"
-
-# Persistent storage for seen items (to avoid duplicates across runs)
+USER_AGENT = "AlertBot/2.1"
 SEEN_FILE = Path.home() / ".alert_bot_seen.json"
 
-# --------- Utilities ---------
+# ========== FUNCTIONS ==========
 
 def log(*args):
     print("[alerts]", *args, flush=True)
 
-
-def getenv_required(name: str) -> str:
+def getenv_required(name):
     v = os.environ.get(name)
     if not v:
-        raise RuntimeError(f"Missing required env var: {name}")
+        raise RuntimeError(f"Missing: {name}")
     return v
 
-
-def load_seen_items() -> set:
-    """Load previously seen item IDs from disk."""
+def load_seen():
     if not SEEN_FILE.exists():
         return set()
     try:
-        with open(SEEN_FILE, 'r') as f:
+        with open(SEEN_FILE) as f:
             data = json.load(f)
-            # Clean old items (older than 7 days)
             cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).timestamp()
-            cleaned = {k: v for k, v in data.items() if v > cutoff}
-            return set(cleaned.keys())
-    except Exception as e:
-        log(f"Error loading seen items: {e}")
+            return set(k for k, v in data.items() if v > cutoff)
+    except:
         return set()
 
-
-def save_seen_items(seen: set) -> None:
-    """Save seen item IDs to disk with timestamps."""
+def save_seen(seen):
     try:
-        # Load existing data
         existing = {}
         if SEEN_FILE.exists():
-            with open(SEEN_FILE, 'r') as f:
+            with open(SEEN_FILE) as f:
                 existing = json.load(f)
         
-        # Add new items with current timestamp
         now = datetime.now(timezone.utc).timestamp()
         for item_id in seen:
             if item_id not in existing:
                 existing[item_id] = now
         
-        # Clean old items (older than 7 days)
         cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).timestamp()
         cleaned = {k: v for k, v in existing.items() if v > cutoff}
         
-        # Save
         SEEN_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(SEEN_FILE, 'w') as f:
             json.dump(cleaned, f)
     except Exception as e:
-        log(f"Error saving seen items: {e}")
+        log(f"Save error: {e}")
 
+def is_paywall(url):
+    return any(d in url.lower() for d in PAYWALL_DOMAINS)
 
-def is_paywall(url: str) -> bool:
-    """Check if URL is from a known paywall site."""
-    url_lower = url.lower()
-    return any(domain in url_lower for domain in PAYWALL_DOMAINS)
+def contains_sports(text):
+    return any(k in text.lower() for k in SPORTS_KEYWORDS)
 
-
-def contains_sports(text: str) -> bool:
-    """Check if text contains sports-related keywords."""
+def is_trash(text):
     text_lower = text.lower()
-    return any(keyword in text_lower for keyword in SPORTS_KEYWORDS)
-
-
-def is_boring(text: str, priority: int) -> bool:
-    """Check if text is boring/generic (unless it's high priority or has juice)."""
-    if priority >= 20:  # High priority overrides boring filter
+    if any(k in text_lower for k in JUICE_KEYWORDS):
         return False
-    
+    return any(k in text_lower for k in TRASH_KEYWORDS)
+
+def mentions_black_artist(text):
     text_lower = text.lower()
-    
-    # Check if it has JUICE keywords (overrides boring)
-    if any(keyword in text_lower for keyword in JUICE_KEYWORDS):
-        return False
-    
-    # Now check if boring
-    return any(keyword in text_lower for keyword in BORING_KEYWORDS)
+    return any(artist in text_lower for artist in BLACK_ARTISTS)
 
-
-def calculate_priority(title: str, content: str = "") -> int:
-    """Calculate priority score (higher = more important)."""
+def calculate_priority(title, content=""):
     text = (title + " " + content).lower()
     score = 0
     
-    for keyword in HIGH_PRIORITY_KEYWORDS:
-        if keyword in text:
+    for k in HIGH_PRIORITY_KEYWORDS:
+        if k in text:
             score += 10
     
-    # Boost for certain source indicators
-    if any(word in text for word in ["breaking", "urgent", "critical", "emergency"]):
+    if mentions_black_artist(text):
+        score += 30
+    
+    for k in JUICE_KEYWORDS:
+        if k in text:
+            score += 15
+    
+    if any(w in text for w in ["breaking", "urgent", "just in"]):
+        score += 20
+    
+    if any(w in text for w in ["beef", "drama", "diss", "responds"]):
+        score += 15
+    
+    if any(w in text for w in ["died", "dead", "death", "rip"]):
+        score += 25
+    
+    if any(w in text for w in ["arrested", "charges", "sentenced"]):
         score += 20
     
     return score
 
-
-def send_telegram(token: str, chat_id: str, html_text: str, disable_preview: bool = False) -> None:
-    """Fire-and-forget Telegram message; log errors but don't raise."""
+def send_telegram(token, chat_id, html_text, disable_preview=False):
     try:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         data = {
@@ -392,16 +324,14 @@ def send_telegram(token: str, chat_id: str, html_text: str, disable_preview: boo
             "disable_web_page_preview": "true" if disable_preview else "false",
         }
         r = requests.post(url, data=data, timeout=20)
-        if r.status_code != 200:
-            log("Telegram non-200:", r.status_code, r.text[:300])
+        if r.status_code == 200:
+            log("✓ Sent")
         else:
-            log("✓ Sent message")
+            log(f"Telegram error: {r.status_code}")
     except Exception as e:
-        log("Telegram error:", repr(e))
+        log(f"Send error: {e}")
 
-
-def is_recent(dt_str: str, window_minutes: int) -> bool:
-    """Return True if dt_str is within the last window_minutes; lenient parsing."""
+def is_recent(dt_str, window_minutes):
     if not dt_str:
         return False
     try:
@@ -413,12 +343,10 @@ def is_recent(dt_str: str, window_minutes: int) -> bool:
         now = datetime.now(timezone.utc)
         age_minutes = (now - dt).total_seconds() / 60
         return age_minutes <= window_minutes
-    except Exception as e:
+    except:
         return False
 
-
-def entry_id(entry) -> str:
-    """Best-effort stable id for an RSS entry."""
+def entry_id(entry):
     return (
         getattr(entry, "id", None)
         or getattr(entry, "guid", None)
@@ -426,34 +354,30 @@ def entry_id(entry) -> str:
         or getattr(entry, "title", "")
     ) or ""
 
+# ========== MAIN ==========
 
-# --------- Sources ---------
-
-def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool, seen: set) -> int:
-    """Fetch all configured RSS/Atom feeds and post items. Returns count of sent messages."""
+def check_feeds(token, chat_id, window_minutes, debug, seen):
     total_sent = 0
-    new_items = []  # Collect items with priority scores
+    new_items = []
     
     for label, url in FEEDS.items():
         try:
             log(f"Checking: {label}")
             d = feedparser.parse(url)
             entries = d.entries or []
-            log(f"  Fetched {len(entries)} items")
+            log(f"  Found {len(entries)} items")
 
             if debug:
-                # Send up to 2 sample items, even if old.
                 for e in entries[:2]:
-                    link = getattr(e, "link", "") or ""
-                    title = getattr(e, "title", "") or "New item"
+                    link = getattr(e, "link", "")
+                    title = getattr(e, "title", "New item")
                     published = getattr(e, "published", "") or getattr(e, "updated", "") or "No date"
                     if link:
-                        msg = f"[DEBUG] {label}\n<b>{title}</b>\n📅 {published}\n<a href=\"{link}\">Read more</a>"
+                        msg = f"[DEBUG] {label}\n<b>{title}</b>\n📅 {published}\n<a href=\"{link}\">Read</a>"
                         send_telegram(token, chat_id, msg)
                         total_sent += 1
                 continue
 
-            # Normal mode: filter and score items
             for e in entries:
                 eid = entry_id(e)
                 if eid in seen:
@@ -467,29 +391,23 @@ def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool
                 if not link:
                     continue
                 
-                # Filter paywall sites
                 if is_paywall(link):
-                    log(f"  ⊗ Skipped (paywall): {title[:50]}")
+                    log(f"  ⊗ Paywall: {title[:40]}")
                     continue
                 
-                # Filter sports
                 if contains_sports(title + " " + summary):
-                    log(f"  ⊗ Skipped (sports): {title[:50]}")
+                    log(f"  ⊗ Sports: {title[:40]}")
                     continue
                 
-                # Check if recent
                 if not is_recent(published, window_minutes):
                     continue
                 
-                # Calculate priority
                 priority = calculate_priority(title, summary)
                 
-                # Filter boring content (unless high priority)
-                if is_boring(title + " " + summary, priority):
-                    log(f"  ⊗ Skipped (boring): {title[:50]}")
+                if is_trash(title + " " + summary):
+                    log(f"  ⊗ Trash: {title[:40]}")
                     continue
                 
-                # Add to new items
                 seen.add(eid)
                 new_items.append({
                     'label': label,
@@ -499,129 +417,58 @@ def check_rss_sources(token: str, chat_id: str, window_minutes: int, debug: bool
                 })
 
         except Exception as ex:
-            log(f"  ERROR: {repr(ex)}")
+            log(f"  ERROR: {ex}")
     
-    # Sort by priority (highest first) and send
+    # Sort by priority, send
     new_items.sort(key=lambda x: x['priority'], reverse=True)
     
     for item in new_items:
-        priority_marker = "🔥 " if item['priority'] >= 20 else ""
-        msg = f"{priority_marker}{item['label']}\n<b>{item['title']}</b>\n<a href=\"{item['link']}\">Read more</a>"
+        marker = "🔥 " if item['priority'] >= 20 else ""
+        msg = f"{marker}{item['label']}\n<b>{item['title']}</b>\n<a href=\"{item['link']}\">Read</a>"
         send_telegram(token, chat_id, msg)
         total_sent += 1
     
     if new_items:
-        log(f"Found {len(new_items)} recent items (after filtering)")
+        log(f"Sent {len(new_items)} alerts")
     
     return total_sent
-
-
-def check_nws_severe(token: str, chat_id: str, window_minutes: int, debug: bool) -> int:
-    """Fetch US severe/extreme weather alerts from NWS. Returns count of sent messages."""
-    total_sent = 0
-    try:
-        log("Checking: ⚠️ NWS Severe Weather")
-        r = requests.get(
-            NWS_URL,
-            headers={"User-Agent": USER_AGENT, "Accept": "application/geo+json"},
-            timeout=25,
-        )
-        if r.status_code != 200:
-            log(f"  NWS non-200: {r.status_code}")
-            return 0
-
-        data = r.json()
-        feats = data.get("features", []) if isinstance(data, dict) else []
-        log(f"  Active severe/extreme alerts: {len(feats)}")
-
-        if debug:
-            for feat in feats[:2]:
-                p = feat.get("properties", {}) if isinstance(feat, dict) else {}
-                event = p.get("event", "NWS Alert")
-                area = p.get("areaDesc", "")
-                ts = p.get("sent") or p.get("effective") or "Unknown time"
-                link = p.get("uri") or p.get("id") or "https://www.weather.gov/alerts"
-                msg = f"[DEBUG] ⚠️ SEVERE WEATHER (US)\n<b>{event}</b>\n📍 {area[:140]}\n📅 {ts}\n<a href=\"{link}\">Details</a>"
-                send_telegram(token, chat_id, msg, disable_preview=True)
-                total_sent += 1
-            return total_sent
-
-        # Normal: only recent alerts
-        for feat in feats:
-            p = feat.get("properties", {}) if isinstance(feat, dict) else {}
-            ts = p.get("sent") or p.get("effective") or p.get("onset") or ""
-            if not is_recent(ts, window_minutes):
-                continue
-            
-            event = p.get("event", "NWS Alert")
-            area = p.get("areaDesc", "")
-            link = p.get("uri") or p.get("id") or "https://www.weather.gov/alerts"
-            msg = f"🔥 ⚠️ SEVERE WEATHER (US)\n<b>{event}</b>\n📍 {area[:140]}\n<a href=\"{link}\">Details</a>"
-            send_telegram(token, chat_id, msg, disable_preview=True)
-            total_sent += 1
-
-    except Exception as e:
-        log(f"  ERROR: {repr(e)}")
-    
-    return total_sent
-
-
-# --------- Main ---------
-
-def parse_args():
-    ap = argparse.ArgumentParser(description="Send alerts to Telegram.")
-    ap.add_argument(
-        "--debug",
-        action="store_true",
-        help="Send a couple of sample items per source even if they are old.",
-    )
-    return ap.parse_args()
-
 
 def main():
-    args = parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debug", action="store_true")
+    args = parser.parse_args()
 
     try:
         token = getenv_required("TELEGRAM_TOKEN")
         chat_id = getenv_required("TELEGRAM_CHAT_ID")
     except Exception as e:
-        log("Missing envs:", repr(e))
-        return 0
+        log(f"Missing env: {e}")
+        return 1
 
-    try:
-        window_minutes = int(os.environ.get("WINDOW_MINUTES", "30"))
-    except Exception:
-        window_minutes = 30
+    window_minutes = int(os.environ.get("WINDOW_MINUTES", "45"))
 
     log("=" * 60)
-    log(f"Alert Bot v2.0 Starting")
-    log(f"Window: {window_minutes} minutes | Debug: {args.debug}")
+    log(f"Alert Bot v2.1 - Baltimore Edition")
+    log(f"Window: {window_minutes} min | Debug: {args.debug}")
     log(f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC")
     log("=" * 60)
 
-    # Load seen items
-    seen = load_seen_items()
-    log(f"Loaded {len(seen)} previously seen items")
+    seen = load_seen()
+    log(f"Loaded {len(seen)} seen items")
 
-    # Check all sources
-    rss_sent = check_rss_sources(token, chat_id, window_minutes, args.debug, seen)
-    nws_sent = check_nws_severe(token, chat_id, window_minutes, args.debug)
-    
-    total_sent = rss_sent + nws_sent
+    total = check_feeds(token, chat_id, window_minutes, args.debug, seen)
 
-    # Save seen items
     if not args.debug:
-        save_seen_items(seen)
+        save_seen(seen)
 
     log("=" * 60)
-    log(f"Run complete. Sent {total_sent} alerts.")
+    log(f"Sent {total} alerts")
     log("=" * 60)
     return 0
-
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as e:
-        log("Fatal error:", repr(e))
-        sys.exit(0)
+        log(f"Fatal: {e}")
+        sys.exit(1)
